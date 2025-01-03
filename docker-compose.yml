@@ -1,0 +1,31 @@
+services:
+  sc2-stats-backend:
+    container_name: sc2-stats-backend
+    image: sc2-stats-backend:latest
+    volumes:
+      - .env:/app/.env
+      - ./backend:/app/backend
+    networks:
+      - sc2-stats-network
+
+  sc2-stats-db:
+    container_name: sc2-stats-db
+    restart: unless-stopped
+    image: sc2-stats-db:latest
+    command: >-
+      -p 5482
+    environment:
+      POSTGRES_DB: ${SC2_STATS_PG_DB}
+      POSTGRES_USER: ${SC2_STATS_PG_USER}
+      POSTGRES_PASSWORD: ${SC2_STATS_PG_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    ports:
+      - "5482:5482"
+    networks:
+      - sc2-stats-network
+
+networks:
+  sc2-stats-network:
+    name: sc2-stats-network
+    external: true

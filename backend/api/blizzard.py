@@ -8,18 +8,13 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 import requests
-from static import (
+from backend.enums import RegionId
+from backend.static import (
     BLIZZARD_API_BASE,
     BLIZZARD_CLIENT_ID,
     BLIZZARD_CLIENT_SECRET,
     BLIZZARD_OATH_BASE,
 )
-
-OAUTH_TOKEN = None
-OAUTH_TOKEN_EXPIRATION = None
-
-# TODO Move this to app entrypoint
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
 
 
 class BlizzardApi:
@@ -59,20 +54,31 @@ class BlizzardApi:
 
     @_refesh_battlenet_oauth_token
     def get(self, url):
-        logging.info(f"Sendin GET request to {url}")
+        logging.info(f"Sending GET request to {url=}")
         return requests.get(url, headers=BlizzardApi.headers()).json()
 
     def get_season(self, region_id):
         """
         /sc2/ladder/season/:regionId
         """
-        return self.get(url=BLIZZARD_API_BASE.format(region="us") + f"/sc2/ladder/season/{region_id}")
+        return self.get(
+            url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower()) + f"/sc2/ladder/season/{region_id}"
+        )
 
-    def get_league_data(self, season_id, queue_id, team_type, league_id):
+    def get_league(self, region_id, season_id, queue_id, team_type, league_id):
         """
         /data/sc2/league/{seasonId}/{queueId}/{teamType}/{leagueId}
         """
         return self.get(
-            url=BLIZZARD_API_BASE.format(region="us")
+            url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower())
             + f"/data/sc2/league/{season_id}/{queue_id}/{team_type}/{league_id}"
+        )
+
+    def get_ladder(self, region_id, ladder_id):
+        """
+        /sc2/legacy/ladder/:regionId/:ladderId
+        """
+        return self.get(
+            url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower())
+            + f"/sc2/legacy/ladder/{region_id}/{ladder_id}"
         )
