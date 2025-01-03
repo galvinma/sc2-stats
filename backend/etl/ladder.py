@@ -38,12 +38,14 @@ def get_ladders():
                             session=session,
                             model=League,
                             constraint={
+                                "region_id": region.value,
                                 "league_id": league_response.key.league_id,
                                 "season_id": league_response.key.season_id,
                                 "queue_id": league_response.key.queue_id,
                                 "team_type": league_response.key.team_type,
                             },
                             values={
+                                "region_id": region.value,
                                 "league_id": league_response.key.league_id,
                                 "season_id": league_response.key.season_id,
                                 "queue_id": league_response.key.queue_id,
@@ -57,14 +59,20 @@ def get_ladders():
                                     session=session,
                                     model=Ladder,
                                     constraint={
+                                        "region_id": region.value,
                                         "ladder_id": league_division.ladder_id,
                                         "league_id": league.id,
                                     },
                                     values={
                                         "ladder_id": league_division.ladder_id,
+                                        "region_id": region.value,
                                         "min_rating": league_tier.min_rating,
                                         "max_rating": league_tier.max_rating,
                                         "member_count": league_division.member_count,
                                         "league_id": league.id,
                                     },
                                 )
+
+
+def get_ladder_members():
+    api = BlizzardApi()

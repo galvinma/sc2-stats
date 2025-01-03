@@ -1,8 +1,8 @@
 """Add league and ladder schema
 
-Revision ID: 5cd94908e4bc
+Revision ID: 7ba72e14cbbc
 Revises: 
-Create Date: 2025-01-03 13:08:11.567256
+Create Date: 2025-01-03 13:51:47.102049
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '5cd94908e4bc'
+revision: str = '7ba72e14cbbc'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -23,22 +23,24 @@ def upgrade() -> None:
     op.create_table('league',
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('league_id', sa.Integer(), nullable=False),
+    sa.Column('region_id', sa.Integer(), nullable=False),
     sa.Column('season_id', sa.Integer(), nullable=False),
     sa.Column('queue_id', sa.Integer(), nullable=False),
     sa.Column('team_type', sa.Integer(), nullable=False),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('league_id', 'season_id', 'queue_id', 'team_type')
+    sa.UniqueConstraint('league_id', 'region_id', 'season_id', 'queue_id', 'team_type')
     )
     op.create_table('ladder',
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('ladder_id', sa.Integer(), nullable=False),
+    sa.Column('region_id', sa.Integer(), nullable=False),
     sa.Column('min_rating', sa.Integer(), nullable=True),
     sa.Column('max_rating', sa.Integer(), nullable=True),
     sa.Column('member_count', sa.Integer(), nullable=True),
     sa.Column('league_id', sa.Uuid(), nullable=True),
     sa.ForeignKeyConstraint(['league_id'], ['league.id'], ),
     sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('league_id', 'ladder_id')
+    sa.UniqueConstraint('league_id', 'ladder_id', 'region_id')
     )
     # ### end Alembic commands ###
 

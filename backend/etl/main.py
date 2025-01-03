@@ -1,7 +1,7 @@
 import logging
 import argparse
 
-from backend.etl.league import get_ladders
+from backend.etl.ladder import get_ladders
 
 
 if __name__ == "__main__":
