@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 import requests
+from tenacity import retry, stop_after_attempt, wait_fixed
+
 from backend.enums import RegionId
 from backend.static import (
     BLIZZARD_API_BASE,
@@ -23,6 +25,7 @@ class BlizzardApi:
 
     def _refesh_battlenet_oauth_token(func):
         @wraps(func)
+        @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
         def _wrapper(*args, **kwargs):
             try:
                 if not BlizzardApi.oauth_token or BlizzardApi.token_expired():
@@ -53,6 +56,7 @@ class BlizzardApi:
         return {"Authorization": f"Bearer {BlizzardApi.oauth_token}"}
 
     @_refesh_battlenet_oauth_token
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
     def get(self, url):
         logging.info(f"Sending GET request to {url=}")
         return requests.get(url, headers=BlizzardApi.headers()).json()

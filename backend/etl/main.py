@@ -1,11 +1,12 @@
-import logging
 import argparse
+import logging
 
-from backend.etl.ladder import get_ladders
-
+from backend.etl.ladder import get_ladder_members, get_ladders
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(module)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-pipeline")
@@ -13,3 +14,4 @@ if __name__ == "__main__":
 
     if args.pipeline == "ladders":
         get_ladders()
+        get_ladder_members()

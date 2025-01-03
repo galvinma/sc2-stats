@@ -1,10 +1,8 @@
-from typing import List, Optional
 import uuid
-from sqlalchemy import ForeignKey, String, UniqueConstraint
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
-from sqlalchemy.orm import DeclarativeBase
+from typing import List, Optional
+
+from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
@@ -59,4 +57,45 @@ class Ladder(Base):
             + f"min_rating={self.min_rating!r}, "
             + f"max_rating={self.max_rating!r}, "
             + f"member_count={self.member_count!r})"
+        )
+
+
+class Character(Base):
+    __tablename__ = "character"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+
+    character_id: Mapped[str] = mapped_column()
+    realm: Mapped[int] = mapped_column()
+    region: Mapped[int] = mapped_column()
+    display_name: Mapped[str] = mapped_column()
+    clan_name: Mapped[Optional[str]] = mapped_column()
+    clan_tag: Mapped[Optional[str]] = mapped_column()
+    profile_path: Mapped[str] = mapped_column()
+    join_timestamp: Mapped[int] = mapped_column()
+    points: Mapped[Optional[int]] = mapped_column()
+    wins: Mapped[Optional[int]] = mapped_column()
+    losses: Mapped[Optional[int]] = mapped_column()
+    highest_rank: Mapped[Optional[int]] = mapped_column()
+    previous_rank: Mapped[Optional[int]] = mapped_column()
+    favorite_race_p1: Mapped[Optional[str]] = mapped_column()
+
+    UniqueConstraint(character_id, realm, region)
+
+    def __repr__(self) -> str:
+        return (
+            f"Character(id={self.id!r}, "
+            + f"character_id={self.character_id!r}, "
+            + f"realm={self.realm!r}, "
+            + f"region={self.region!r}, "
+            + f"display_name={self.display_name!r}, "
+            + f"clan_name={self.clan_name!r}, "
+            + f"clan_tag={self.clan_tag!r}, "
+            + f"profile_path={self.profile_path!r}, "
+            + f"join_timestamp={self.join_timestamp!r}, "
+            + f"points={self.points!r}, "
+            + f"wins={self.wins!r}, "
+            + f"losses={self.losses!r}, "
+            + f"highest_rank={self.highest_rank!r}, "
+            + f"previous_rank={self.previous_rank!r}, "
+            + f"favorite_race_p1={self.favorite_race_p1!r})"
         )

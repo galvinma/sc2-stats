@@ -1,11 +1,11 @@
 from typing import List, Optional
-from pydantic import ConfigDict, Field, BaseModel
+
+from pydantic import BaseModel, ConfigDict
 
 
 class LeagueKey(BaseModel):
     model_config = ConfigDict(strict=True)
 
-    id: Optional[int] = Field(default=None, primary_key=True)
     league_id: int
     season_id: int
     queue_id: int
@@ -15,7 +15,6 @@ class LeagueKey(BaseModel):
 class LeagueDivision(BaseModel):
     model_config = ConfigDict(strict=True)
 
-    id: Optional[int] = Field(default=None, primary_key=True)
     ladder_id: int
     member_count: int
 
