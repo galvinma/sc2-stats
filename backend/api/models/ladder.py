@@ -6,9 +6,9 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 class LadderCharacter(BaseModel):
     model_config = ConfigDict(strict=True)
 
-    id: str
-    realm: int
-    region: int
+    profile_id: str = Field(validation_alias=AliasChoices("id"))
+    realm_id: int = Field(validation_alias=AliasChoices("realm"))
+    region_id: int = Field(validation_alias=AliasChoices("region"))
     display_name: str = Field(validation_alias=AliasChoices("displayName"))
     clan_name: str = Field(validation_alias=AliasChoices("clanName"))
     clan_tag: str = Field(validation_alias=AliasChoices("clanTag"))

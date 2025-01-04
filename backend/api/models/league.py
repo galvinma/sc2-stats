@@ -31,5 +31,6 @@ class LeagueTier(BaseModel):
 class LeagueResponse(BaseModel):
     model_config = ConfigDict(strict=True)
 
+    region_id: Optional[int] = None
     key: Optional[LeagueKey] = None
     tier: Optional[List[LeagueTier]] = []

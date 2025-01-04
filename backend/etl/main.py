@@ -1,7 +1,9 @@
 import argparse
 import logging
 
-from backend.etl.ladder import get_ladder_members, get_ladders
+from backend.etl.character import get_characters
+from backend.etl.ladder import get_ladders
+from backend.etl.match import get_matches
 
 if __name__ == "__main__":
     logging.basicConfig(
@@ -12,6 +14,10 @@ if __name__ == "__main__":
     parser.add_argument("-pipeline")
     args = parser.parse_args()
 
-    if args.pipeline == "ladders":
+    if args.pipeline == "ladder":
         get_ladders()
-        get_ladder_members()
+        get_characters()
+    elif args.pipeline == "match":
+        get_matches()
+    else:
+        logging.error(f"Unsupported pipeline arg. {args.pipeline=}")

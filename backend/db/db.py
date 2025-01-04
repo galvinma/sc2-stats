@@ -11,14 +11,12 @@ engine = create_engine(os.environ.get("PG_URI"))
 Session = sessionmaker(engine)
 
 
-def query(model, values):
-    with Session() as session:
-        return session.query(model).filter_by(**values).all()
+def query(params, filters=None):
+    if filters is None:
+        filters = {}
 
-
-def query_all(model):
     with Session() as session:
-        return session.query(model).all()
+        return session.query(*params).filter_by(**filters).all()
 
 
 def upsert(session, model, filter, values):
@@ -28,8 +26,8 @@ def upsert(session, model, filter, values):
             setattr(instance, key, value)
     else:
         instance = model(**values)
-        session.add(instance)
 
+    session.add(instance)
     session.commit()
     return instance
 

@@ -25,7 +25,6 @@ class BlizzardApi:
 
     def _refesh_battlenet_oauth_token(func):
         @wraps(func)
-        @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
         def _wrapper(*args, **kwargs):
             try:
                 if not BlizzardApi.oauth_token or BlizzardApi.token_expired():
@@ -56,10 +55,30 @@ class BlizzardApi:
         return {"Authorization": f"Bearer {BlizzardApi.oauth_token}"}
 
     @_refesh_battlenet_oauth_token
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     def get(self, url):
         logging.info(f"Sending GET request to {url=}")
-        return requests.get(url, headers=BlizzardApi.headers()).json()
+        res = requests.get(url, headers=BlizzardApi.headers())
+        if res.ok:
+            return res.json()
+
+        if res.status_code == 503:
+            logging.error(f"Service Unavailable. {res.status_code=}, {res.reason=}, {url=}")
+            return {}
+
+        if res.status_code == 429:
+            logging.warning("Too May Requests. Will wait and retry...")
+            raise Exception
+
+        if res.status_code == 404:
+            logging.error(f"Not found. {res.status_code=}, {res.reason=}, {url=}")
+            return {}
+
+        if res.status_code >= 400:
+            logging.error(f"Failed GET. {res.status_code=}, {res.reason=}, {url=}. Will retry...")
+            raise Exception
+
+        return {}
 
     def get_season(self, region_id):
         """
@@ -85,4 +104,13 @@ class BlizzardApi:
         return self.get(
             url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower())
             + f"/sc2/legacy/ladder/{region_id}/{ladder_id}"
+        )
+
+    def get_match_history(self, region_id, realm_id, profile_id):
+        """
+        /sc2/legacy/profile/:regionId/:realmId/:profileId/matches
+        """
+        return self.get(
+            url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower())
+            + f"/sc2/legacy/profile/{region_id}/{realm_id}/{profile_id}/matches"
         )
