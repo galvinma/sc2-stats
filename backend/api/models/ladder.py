@@ -2,6 +2,8 @@ from typing import List, Optional
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
+from backend.db.model import Ladder
+
 
 class LadderCharacter(BaseModel):
     model_config = ConfigDict(strict=True)
@@ -29,6 +31,7 @@ class LadderMember(BaseModel):
 
 
 class LadderResponse(BaseModel):
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict(strict=True, arbitrary_types_allowed=True)
 
+    ladder: Optional[Ladder] = None
     ladder_members: Optional[List[LadderMember]] = Field(default=[], validation_alias=AliasChoices("ladderMembers"))

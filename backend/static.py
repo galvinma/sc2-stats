@@ -6,7 +6,7 @@ load_dotenv()
 
 MAX_WORKERS = 16
 LADDER_BATCH_SIZE = 50
-CHARACTER_BATCH_SIZE = 500
+PROFILE_BATCH_SIZE = 500
 MATCH_BATCH_SIZE = 5000
 BLIZZARD_OATH_BASE = "https://oauth.battle.net"
 BLIZZARD_API_BASE = "https://{region}.api.blizzard.com"

@@ -50,3 +50,10 @@ class LeagueId(Enum):
     DIAMOND = 4
     MASTER = 5
     GRANDMASTER = 6
+
+
+class Race(Enum):
+    ZERG = 0
+    TERRAN = 1
+    PROTOSS = 2
+    RANDOM = 3

@@ -2,6 +2,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
+from backend.db.model import Profile
+
 
 class Match(BaseModel):
     model_config = ConfigDict(strict=True)
@@ -14,10 +16,7 @@ class Match(BaseModel):
 
 
 class MatchHistoryResponse(BaseModel):
-    model_config = ConfigDict(strict=True)
+    model_config = ConfigDict(strict=True, arbitrary_types_allowed=True)
 
-    character_id: Optional[str] = None
-    profile_id: Optional[str] = None
-    realm_id: Optional[int] = None
-    region_id: Optional[int] = None
+    profile: Optional[Profile] = None
     matches: Optional[List[Match]] = []

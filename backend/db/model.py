@@ -4,6 +4,8 @@ from typing import List, Optional
 from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+from backend.enums import Race
+
 
 class Base(DeclarativeBase):
     pass
@@ -30,7 +32,8 @@ class League(Base):
             + f"region_id={self.region_id!r}, "
             + f"season_id={self.season_id!r}, "
             + f"queue_id={self.queue_id!r}, "
-            + f"team_type={self.team_type!r})"
+            + f"team_type={self.team_type!r}"
+            + ")"
         )
 
 
@@ -46,6 +49,7 @@ class Ladder(Base):
 
     league_id = mapped_column(ForeignKey("league.id"))
     league: Mapped[League] = relationship(back_populates="ladders")
+    ladder_members: Mapped[List["LadderMember"]] = relationship(back_populates="ladder")
 
     UniqueConstraint(league_id, ladder_id, region_id)
 
@@ -56,21 +60,15 @@ class Ladder(Base):
             + f"region_id={self.region_id!r}, "
             + f"min_rating={self.min_rating!r}, "
             + f"max_rating={self.max_rating!r}, "
-            + f"member_count={self.member_count!r})"
+            + f"member_count={self.member_count!r}"
+            + ")"
         )
 
 
-class Character(Base):
-    __tablename__ = "character"
+class LadderMember(Base):
+    __tablename__ = "ladder_member"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
 
-    profile_id: Mapped[str] = mapped_column()
-    realm_id: Mapped[int] = mapped_column()
-    region_id: Mapped[int] = mapped_column()
-    display_name: Mapped[str] = mapped_column()
-    clan_name: Mapped[Optional[str]] = mapped_column()
-    clan_tag: Mapped[Optional[str]] = mapped_column()
-    profile_path: Mapped[str] = mapped_column()
     join_timestamp: Mapped[int] = mapped_column()
     points: Mapped[Optional[int]] = mapped_column()
     wins: Mapped[Optional[int]] = mapped_column()
@@ -79,27 +77,99 @@ class Character(Base):
     previous_rank: Mapped[Optional[int]] = mapped_column()
     favorite_race_p1: Mapped[Optional[str]] = mapped_column()
 
-    matches: Mapped[List["Match"]] = relationship(back_populates="character")
+    profile_id = mapped_column(ForeignKey("profile.id"))
+    profile: Mapped["Profile"] = relationship(back_populates="ladder_members")
+    ladder_id = mapped_column(ForeignKey("ladder.id"))
+    ladder: Mapped["Ladder"] = relationship(back_populates="ladder_members")
 
-    UniqueConstraint(profile_id, realm_id, region_id, join_timestamp, favorite_race_p1)
+    UniqueConstraint(profile_id, ladder_id, join_timestamp)
 
     def __repr__(self) -> str:
         return (
-            f"Character(id={self.id!r}, "
+            f"LadderMember(id={self.id!r}, "
             + f"profile_id={self.profile_id!r}, "
-            + f"realm_id={self.realm_id!r}, "
-            + f"region_id={self.region_id!r}, "
-            + f"display_name={self.display_name!r}, "
-            + f"clan_name={self.clan_name!r}, "
-            + f"clan_tag={self.clan_tag!r}, "
-            + f"profile_path={self.profile_path!r}, "
+            + f"ladder_id={self.ladder_id!r}, "
             + f"join_timestamp={self.join_timestamp!r}, "
             + f"points={self.points!r}, "
             + f"wins={self.wins!r}, "
             + f"losses={self.losses!r}, "
             + f"highest_rank={self.highest_rank!r}, "
             + f"previous_rank={self.previous_rank!r}, "
-            + f"favorite_race_p1={self.favorite_race_p1!r})"
+            + f"favorite_race_p1={self.favorite_race_p1!r}"
+            + ")"
+        )
+
+
+class CharacterMMR(Base):
+    __tablename__ = "character_mmr"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+
+    race: Mapped[Race] = mapped_column()
+    mmr: Mapped[int] = mapped_column()
+
+    character_id = mapped_column(ForeignKey("character.id"))
+    character: Mapped["Character"] = relationship(back_populates="character_mmrs")
+
+    UniqueConstraint(character_id, race, mmr)
+
+    def __repr__(self) -> str:
+        return (
+            f"CharacterMMR(id={self.id!r}, "
+            + f"character_id={self.character_id!r}, "
+            + f"race={self.race!r}, "
+            + f"mmr={self.mmr!r}"
+            + ")"
+        )
+
+
+class Character(Base):
+    __tablename__ = "character"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+
+    display_name: Mapped[str] = mapped_column()
+    clan_name: Mapped[Optional[str]] = mapped_column()
+    clan_tag: Mapped[Optional[str]] = mapped_column()
+    profile_path: Mapped[str] = mapped_column()
+
+    profile_id = mapped_column(ForeignKey("profile.id"))
+    profile: Mapped["Profile"] = relationship(back_populates="characters")
+    character_mmrs: Mapped[List["CharacterMMR"]] = relationship(back_populates="character")
+
+    UniqueConstraint(profile_id, display_name)
+
+    def __repr__(self) -> str:
+        return (
+            f"Character(id={self.id!r}, "
+            + f"profile_id={self.profile_id!r}, "
+            + f"display_name={self.display_name!r}, "
+            + f"clan_name={self.clan_name!r}, "
+            + f"clan_tag={self.clan_tag!r}, "
+            + f"profile_path={self.profile_path!r}"
+            + ")"
+        )
+
+
+class Profile(Base):
+    __tablename__ = "profile"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+
+    profile_id: Mapped[str] = mapped_column()
+    realm_id: Mapped[int] = mapped_column()
+    region_id: Mapped[int] = mapped_column()
+
+    matches: Mapped[List["Match"]] = relationship(back_populates="profile")
+    characters: Mapped[List["Character"]] = relationship(back_populates="profile")
+    ladder_members: Mapped[List["LadderMember"]] = relationship(back_populates="profile")
+
+    UniqueConstraint(profile_id, realm_id, region_id)
+
+    def __repr__(self) -> str:
+        return (
+            f"Profile(id={self.id!r}, "
+            + f"profile_id={self.profile_id!r}, "
+            + f"realm_id={self.realm_id!r}, "
+            + f"region_id={self.region_id!r}"
+            + ")"
         )
 
 
@@ -110,27 +180,22 @@ class Match(Base):
     map: Mapped[str] = mapped_column()
     type: Mapped[str] = mapped_column()
     date: Mapped[int] = mapped_column()
-    profile_id: Mapped[str] = mapped_column()
-    realm_id: Mapped[int] = mapped_column()
-    region_id: Mapped[int] = mapped_column()
-    decision: Mapped[Optional[str]] = mapped_column()
-    speed: Mapped[Optional[str]] = mapped_column()
+    decision: Mapped[str] = mapped_column()
+    speed: Mapped[str] = mapped_column()
 
-    character_id = mapped_column(ForeignKey("character.id"))
-    character: Mapped[Character] = relationship(back_populates="matches")
+    profile_id = mapped_column(ForeignKey("profile.id"))
+    profile: Mapped[Profile] = relationship(back_populates="matches")
 
-    UniqueConstraint(character_id, realm_id, region_id, profile_id, date)
+    UniqueConstraint(profile_id, date)
 
     def __repr__(self) -> str:
         return (
             f"Match(id={self.id!r}, "
-            + f"character_id={self.character_id!r}, "
-            + f"realm_id={self.realm_id!r}, "
-            + f"region_id={self.region_id!r}, "
             + f"profile_id={self.profile_id!r}, "
             + f"map={self.map!r}, "
             + f"type={self.type!r}, "
             + f"decision={self.decision!r}, "
             + f"speed={self.speed!r}, "
-            + f"date={self.date!r})"
+            + f"date={self.date!r}"
+            + ")"
         )
