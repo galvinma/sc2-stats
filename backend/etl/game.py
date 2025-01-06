@@ -59,11 +59,11 @@ def pair_matches():
             continue
 
         if len(matches) == 1:
-            waiting_pair += 1
+            waiting_pair += len(matches)
             continue
 
         if len(matches) > 2:
-            conflict += 1
+            conflict += len(matches)
             continue
 
         if len(matches) == 2:
