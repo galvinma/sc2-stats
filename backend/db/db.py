@@ -1,14 +1,27 @@
 import os
+from contextlib import contextmanager
 
 from dotenv import load_dotenv
 from more_itertools import only
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session
 
 load_dotenv()
 
 engine = create_engine(os.environ.get("PG_URI"))
-Session = sessionmaker(engine)
+
+
+@contextmanager
+def session_scope():
+    session = Session(bind=engine)
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
 
 
 def query(session, params, joins=None, filters=None, distinct=None, order_by=None):

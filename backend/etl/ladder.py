@@ -10,7 +10,7 @@ from datetime import datetime
 from backend.api.blizzard import BlizzardApi
 from backend.api.models.game_data import LeagueResponse
 from backend.api.models.ladder import SeasonResponse
-from backend.db.db import Session, get_or_create, upsert
+from backend.db.db import get_or_create, session_scope, upsert
 from backend.db.model import Ladder, League
 from backend.enums import LeagueId, QueueId, RegionId, TeamType
 from backend.utils.concurrency_utils import thread_pool_max_workers
@@ -71,7 +71,7 @@ def get_ladders():
     logging.info("Starting fetch of current leagues and ladders...")
     start = datetime.now()
     for league_response in process_leagues():
-        with Session() as session:
+        with session_scope() as session:
             league = get_or_create(
                 session,
                 model=League,
