@@ -11,7 +11,7 @@ from more_itertools import one
 
 from backend.api.blizzard import BlizzardApi
 from backend.api.models.legacy import LegacyLadderResponse
-from backend.db.db import Session, get_or_create, query, upsert
+from backend.db.db import get_or_create, query, session_scope, upsert
 from backend.db.model import Character, Ladder, LadderMember, Profile
 from backend.static import LADDER_BATCH_SIZE
 from backend.utils.concurrency_utils import thread_pool_max_workers
@@ -25,13 +25,12 @@ def get_legacy_ladder_wrapper(ladder):
 
 
 def process_ladder():
-    max_workers = thread_pool_max_workers()
     processed = 0
     batch_start = time.time()
 
-    with Session() as session:
+    with session_scope() as session:
         ladders = query(session, params={Ladder})
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=thread_pool_max_workers()) as executor:
             futures = {executor.submit(get_legacy_ladder_wrapper, ladder): ladder for ladder in ladders}
 
             for future in concurrent.futures.as_completed(futures):
@@ -54,7 +53,7 @@ def get_ladder_members():
     processed_ladder_members = 0
     for ladder_response in process_ladder():
         for ladder_member in ladder_response.ladder_members:
-            with Session() as session:
+            with session_scope() as session:
                 ladder = one(query(session, params={Ladder}, filters=[(Ladder.id == ladder_response.ladder.id)]))
                 profile = get_or_create(
                     session,

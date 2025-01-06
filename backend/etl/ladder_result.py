@@ -13,7 +13,7 @@ from more_itertools import first, only
 from backend.api.blizzard import BlizzardApi
 from backend.api.models.legacy import LegacyMatchHistoryResponse
 from backend.api.models.profile import ProfileLadderResponse
-from backend.db.db import Session, get_or_create, insert, query
+from backend.db.db import get_or_create, insert, query, session_scope
 from backend.db.model import (
     Character,
     CharacterMMR,
@@ -154,14 +154,14 @@ def process_profile_ladder_response(profile_ladder_response):
             if not team_member.race:
                 continue
 
-            with Session() as session:
+            with session_scope() as session:
                 process_ladder_team_member(session, ladder_team, team_member)
 
 
-def process_profile_ladder():
+def process_profile_ladder(max_workers):
     processed = 0
     batch_start = time.time()
-    with Session() as session:
+    with session_scope() as session:
         ladder_members = query(
             session,
             params={
@@ -175,7 +175,7 @@ def process_profile_ladder():
             joins=[(Profile, Profile.id == LadderMember.profile_id), (Ladder, Ladder.id == LadderMember.ladder_id)],
             distinct={LadderMember.ladder_id},
         )
-        with concurrent.futures.ThreadPoolExecutor(max_workers=thread_pool_max_workers()) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(get_profile_ladder_wrapper, ladder_member): ladder_member
                 for ladder_member in ladder_members
@@ -199,9 +199,10 @@ def get_ladder_results():
     logging.info("Starting fetch of ladder results...")
     ladders_processed = 0
     start = datetime.now()
+    max_workers = thread_pool_max_workers()
 
-    with ThreadPool(processes=thread_pool_max_workers()) as pool:
-        for _ in pool.imap(process_profile_ladder_response, process_profile_ladder()):
+    with ThreadPool(processes=int(max_workers / 2)) as pool:
+        for _ in pool.imap(process_profile_ladder_response, process_profile_ladder(max_workers=int(max_workers / 2))):
             ladders_processed += 1
 
     end = datetime.now()

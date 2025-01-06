@@ -6,7 +6,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-from backend.db.db import Session, insert, query
+from backend.db.db import insert, query, session_scope
 from backend.db.model import Game, Match
 from backend.static import MATCH_LOOKBACK_MAX, MATCH_LOOKBACK_MIN, MATCH_LOOKUP_KEY
 from backend.utils.datetime_utils import datetime_to_epoch
@@ -44,31 +44,31 @@ def insert_game(session, matches):
 def pair_matches():
 
     lookup = defaultdict(list)
-    with Session() as session:
+    with session_scope() as session:
         matches = query_unpaired_matches(session)
         logging.info(f"Found {len(matches)} unpaired recent matches...")
         for match in matches:
             key = MATCH_LOOKUP_KEY.format(map=match.map, type=match.type, date=match.date, speed=match.speed)
             lookup[key].append(match)
 
-    waiting_pair = 0
-    paired = 0
-    conflict = 0
-    for _, matches in lookup.items():
-        if not matches or len(matches) < 1:
-            continue
+        waiting_pair = 0
+        paired = 0
+        conflict = 0
+        for _, matches in lookup.items():
+            if not matches or len(matches) < 1:
+                continue
 
-        if len(matches) == 1:
-            waiting_pair += len(matches)
-            continue
+            if len(matches) == 1:
+                waiting_pair += len(matches)
+                continue
 
-        if len(matches) > 2:
-            conflict += len(matches)
-            continue
+            if len(matches) > 2:
+                conflict += len(matches)
+                continue
 
-        if len(matches) == 2:
-            paired += 1
-            insert_game(session, matches)
+            if len(matches) == 2:
+                paired += 1
+                insert_game(session, matches)
 
     logging.info(f"Paired {paired} matches.")
     logging.info(f"{waiting_pair} matches still waiting for results.")
