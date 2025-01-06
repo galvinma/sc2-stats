@@ -1,5 +1,5 @@
 """
-ETL processes associated with SC2 characters
+ETL processes associated with SC2 ladder members (Profile/Character)
 """
 
 import concurrent
@@ -10,52 +10,54 @@ from datetime import datetime
 from more_itertools import one
 
 from backend.api.blizzard import BlizzardApi
-from backend.api.models.ladder import LadderResponse
+from backend.api.models.legacy import LegacyLadderResponse
 from backend.db.db import Session, get_or_create, query, upsert
 from backend.db.model import Character, Ladder, LadderMember, Profile
 from backend.static import LADDER_BATCH_SIZE
-from backend.utils import thread_pool_max_workers
+from backend.utils.concurrency_utils import thread_pool_max_workers
 
 
-def get_ladder_wrapper(ladder):
+def get_legacy_ladder_wrapper(ladder):
     api = BlizzardApi()
-    return LadderResponse.model_validate(api.get_ladder(region_id=ladder.region_id, ladder_id=ladder.ladder_id))
+    return LegacyLadderResponse.model_validate(
+        api.get_legacy_ladder(region_id=ladder.region_id, ladder_id=ladder.ladder_id)
+    )
 
 
 def process_ladder():
     max_workers = thread_pool_max_workers()
-    logging.info(f"Will process ladders with {max_workers=}")
-
     processed = 0
     batch_start = time.time()
 
-    ladders = query(params={Ladder})
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(get_ladder_wrapper, ladder): ladder for ladder in ladders}
+    with Session() as session:
+        ladders = query(session, params={Ladder})
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(get_legacy_ladder_wrapper, ladder): ladder for ladder in ladders}
 
-        for future in concurrent.futures.as_completed(futures):
-            if processed != 0 and processed % LADDER_BATCH_SIZE == 0:
-                logging.info(
-                    f"Processed {processed} ladders. " f"Last batch took {round(time.time() - batch_start)} seconds."
-                )
-                batch_start = time.time()
+            for future in concurrent.futures.as_completed(futures):
+                if processed != 0 and processed % LADDER_BATCH_SIZE == 0:
+                    logging.info(
+                        f"Processed {processed} ladders. "
+                        f"Last batch took {round(time.time() - batch_start)} seconds."
+                    )
+                    batch_start = time.time()
 
-            ladder_response = future.result()
-            ladder_response.ladder = futures[future]
-            yield ladder_response
-            processed += 1
+                ladder_response = future.result()
+                ladder_response.ladder = futures[future]
+                yield ladder_response
+                processed += 1
 
 
-def get_characters():
+def get_ladder_members():
     logging.info("Starting fetch of ladder members (characters)...")
     start = datetime.now()
     processed_ladder_members = 0
     for ladder_response in process_ladder():
         for ladder_member in ladder_response.ladder_members:
             with Session() as session:
-                ladder = one(query(params={Ladder}, filters={"id": ladder_response.ladder.id}))
+                ladder = one(query(session, params={Ladder}, filters=[(Ladder.id == ladder_response.ladder.id)]))
                 profile = get_or_create(
-                    session=session,
+                    session,
                     model=Profile,
                     filter={
                         "profile_id": ladder_member.character.profile_id,
@@ -69,7 +71,7 @@ def get_characters():
                     },
                 )
                 upsert(
-                    session=session,
+                    session,
                     model=Character,
                     filter={
                         "profile_id": profile.id,
@@ -85,7 +87,7 @@ def get_characters():
                     },
                 )
                 upsert(
-                    session=session,
+                    session,
                     model=LadderMember,
                     filter={
                         "profile_id": profile.id,
@@ -99,7 +101,7 @@ def get_characters():
                         "losses": ladder_member.losses,
                         "highest_rank": ladder_member.highest_rank,
                         "previous_rank": ladder_member.previous_rank,
-                        "favorite_race_p1": ladder_member.favorite_race_p1,
+                        "race": ladder_member.race,
                         "profile_id": profile.id,
                         "profile": profile,
                         "ladder_id": ladder.id,

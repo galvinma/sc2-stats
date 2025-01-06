@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 import requests
-from tenacity import retry, stop_after_attempt, wait_fixed
+from tenacity import RetryError, retry, stop_after_attempt, wait_fixed
 
 from backend.enums import RegionId
 from backend.static import (
@@ -55,8 +55,11 @@ class BlizzardApi:
         return {"Authorization": f"Bearer {BlizzardApi.oauth_token}"}
 
     @_refesh_battlenet_oauth_token
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
-    def get(self, url):
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(2),
+    )
+    def _get(self, url):
         logging.info(f"Sending GET request to {url=}")
         res = requests.get(url, headers=BlizzardApi.headers())
         if res.ok:
@@ -80,13 +83,14 @@ class BlizzardApi:
 
         return {}
 
-    def get_season(self, region_id):
-        """
-        /sc2/ladder/season/:regionId
-        """
-        return self.get(
-            url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower()) + f"/sc2/ladder/season/{region_id}"
-        )
+    def get(self, url):
+        try:
+            return self._get(url=url)
+        except RetryError:
+            logging.error(f"Exceeded retries fetching {url=}")
+            return {}
+
+    # Game Data API
 
     def get_league(self, region_id, season_id, queue_id, team_type, league_id):
         """
@@ -97,7 +101,30 @@ class BlizzardApi:
             + f"/data/sc2/league/{season_id}/{queue_id}/{team_type}/{league_id}"
         )
 
-    def get_ladder(self, region_id, ladder_id):
+    # Profile API
+
+    def get_profile_ladder(self, region_id, realm_id, profile_id, ladder_id):
+        """
+        /sc2/profile/:regionId/:realmId/:profileId/ladder/:ladderId
+        """
+        return self.get(
+            url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower())
+            + f"/sc2/profile/{region_id}/{realm_id}/{profile_id}/ladder/{ladder_id}"
+        )
+
+    # Ladder API
+
+    def get_ladder_season(self, region_id):
+        """
+        /sc2/ladder/season/:regionId
+        """
+        return self.get(
+            url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower()) + f"/sc2/ladder/season/{region_id}"
+        )
+
+    # Legacy API
+
+    def get_legacy_ladder(self, region_id, ladder_id):
         """
         /sc2/legacy/ladder/:regionId/:ladderId
         """
@@ -106,7 +133,7 @@ class BlizzardApi:
             + f"/sc2/legacy/ladder/{region_id}/{ladder_id}"
         )
 
-    def get_match_history(self, region_id, realm_id, profile_id):
+    def get_legacy_match_history(self, region_id, realm_id, profile_id):
         """
         /sc2/legacy/profile/:regionId/:realmId/:profileId/matches
         """

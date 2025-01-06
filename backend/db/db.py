@@ -11,12 +11,24 @@ engine = create_engine(os.environ.get("PG_URI"))
 Session = sessionmaker(engine)
 
 
-def query(params, filters=None):
-    if filters is None:
-        filters = {}
+def query(session, params, joins=None, filters=None, distinct=None, order_by=None):
+    stmt = session.query(*params)
 
-    with Session() as session:
-        return session.query(*params).filter_by(**filters).all()
+    if joins:
+        for tbl, condition in joins:
+            stmt = stmt.join(tbl, condition)
+
+    if filters:
+        for filter in filters:
+            stmt = stmt.filter(filter)
+
+    if distinct:
+        stmt = stmt.distinct(*distinct)
+
+    if order_by is not None:
+        stmt = stmt.order_by(order_by)
+
+    return stmt.all()
 
 
 def upsert(session, model, filter, values):
@@ -27,6 +39,13 @@ def upsert(session, model, filter, values):
     else:
         instance = model(**values)
 
+    session.add(instance)
+    session.commit()
+    return instance
+
+
+def insert(session, model, values):
+    instance = model(**values)
     session.add(instance)
     session.commit()
     return instance

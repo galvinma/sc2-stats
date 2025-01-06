@@ -75,7 +75,7 @@ class LadderMember(Base):
     losses: Mapped[Optional[int]] = mapped_column()
     highest_rank: Mapped[Optional[int]] = mapped_column()
     previous_rank: Mapped[Optional[int]] = mapped_column()
-    favorite_race_p1: Mapped[Optional[str]] = mapped_column()
+    race: Mapped[Optional[Race]] = mapped_column()
 
     profile_id = mapped_column(ForeignKey("profile.id"))
     profile: Mapped["Profile"] = relationship(back_populates="ladder_members")
@@ -95,7 +95,7 @@ class LadderMember(Base):
             + f"losses={self.losses!r}, "
             + f"highest_rank={self.highest_rank!r}, "
             + f"previous_rank={self.previous_rank!r}, "
-            + f"favorite_race_p1={self.favorite_race_p1!r}"
+            + f"race={self.race!r}"
             + ")"
         )
 
@@ -106,11 +106,12 @@ class CharacterMMR(Base):
 
     race: Mapped[Race] = mapped_column()
     mmr: Mapped[int] = mapped_column()
+    date: Mapped[int] = mapped_column()
 
     character_id = mapped_column(ForeignKey("character.id"))
     character: Mapped["Character"] = relationship(back_populates="character_mmrs")
 
-    UniqueConstraint(character_id, race, mmr)
+    UniqueConstraint(character_id, race, mmr, date)
 
     def __repr__(self) -> str:
         return (
@@ -118,6 +119,7 @@ class CharacterMMR(Base):
             + f"character_id={self.character_id!r}, "
             + f"race={self.race!r}, "
             + f"mmr={self.mmr!r}"
+            + f"date={self.date!r}"
             + ")"
         )
 
@@ -182,6 +184,7 @@ class Match(Base):
     date: Mapped[int] = mapped_column()
     decision: Mapped[str] = mapped_column()
     speed: Mapped[str] = mapped_column()
+    duration: Mapped[int] = mapped_column()
 
     profile_id = mapped_column(ForeignKey("profile.id"))
     profile: Mapped[Profile] = relationship(back_populates="matches")
@@ -191,11 +194,12 @@ class Match(Base):
     def __repr__(self) -> str:
         return (
             f"Match(id={self.id!r}, "
-            + f"profile_id={self.profile_id!r}, "
             + f"map={self.map!r}, "
             + f"type={self.type!r}, "
+            + f"date={self.date!r}, "
             + f"decision={self.decision!r}, "
             + f"speed={self.speed!r}, "
-            + f"date={self.date!r}"
+            + f"duration={self.duration!r}, "
+            + f"profile_id={self.profile_id!r}"
             + ")"
         )

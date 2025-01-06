@@ -1,8 +1,8 @@
 """Init schema
 
-Revision ID: bcd7ddaa2f10
+Revision ID: 046d5556acb8
 Revises:
-Create Date: 2025-01-04 22:14:36.329406
+Create Date: 2025-01-05 21:44:35.931110
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "bcd7ddaa2f10"
+revision: str = "046d5556acb8"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -79,6 +79,7 @@ def upgrade() -> None:
         sa.Column("date", sa.Integer(), nullable=False),
         sa.Column("decision", sa.String(), nullable=False),
         sa.Column("speed", sa.String(), nullable=False),
+        sa.Column("duration", sa.Integer(), nullable=False),
         sa.Column("profile_id", sa.Uuid(), nullable=True),
         sa.ForeignKeyConstraint(
             ["profile_id"],
@@ -92,13 +93,14 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("race", sa.Enum("ZERG", "TERRAN", "PROTOSS", "RANDOM", name="race"), nullable=False),
         sa.Column("mmr", sa.Integer(), nullable=False),
+        sa.Column("date", sa.Integer(), nullable=False),
         sa.Column("character_id", sa.Uuid(), nullable=True),
         sa.ForeignKeyConstraint(
             ["character_id"],
             ["character.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("character_id", "race", "mmr"),
+        sa.UniqueConstraint("character_id", "race", "mmr", "date"),
     )
     op.create_table(
         "ladder_member",
@@ -109,7 +111,7 @@ def upgrade() -> None:
         sa.Column("losses", sa.Integer(), nullable=True),
         sa.Column("highest_rank", sa.Integer(), nullable=True),
         sa.Column("previous_rank", sa.Integer(), nullable=True),
-        sa.Column("favorite_race_p1", sa.String(), nullable=True),
+        sa.Column("race", sa.Enum("ZERG", "TERRAN", "PROTOSS", "RANDOM", name="race"), nullable=True),
         sa.Column("profile_id", sa.Uuid(), nullable=True),
         sa.Column("ladder_id", sa.Uuid(), nullable=True),
         sa.ForeignKeyConstraint(
