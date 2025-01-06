@@ -175,6 +175,15 @@ class Profile(Base):
         )
 
 
+class Game(Base):
+    __tablename__ = "game"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+
+    duration: Mapped[int] = mapped_column()
+
+    matches: Mapped[List["Match"]] = relationship(back_populates="game")
+
+
 class Match(Base):
     __tablename__ = "match"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -188,6 +197,9 @@ class Match(Base):
 
     profile_id = mapped_column(ForeignKey("profile.id"))
     profile: Mapped[Profile] = relationship(back_populates="matches")
+
+    game_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("game.id"))
+    game: Mapped[Game] = relationship(back_populates="matches")
 
     UniqueConstraint(profile_id, date)
 
