@@ -1,33 +1,49 @@
 import argparse
-import logging
+import time
 
+import schedule
 from dotenv import load_dotenv
 
 from backend.etl.game import create_games
 from backend.etl.ladder import get_ladders
 from backend.etl.ladder_member import get_ladder_members
 from backend.etl.ladder_result import get_ladder_results
+from backend.utils.logging_utils import get_logger
+
+load_dotenv()
+
+logger = get_logger(__name__)
+
 
 if __name__ == "__main__":
 
-    load_dotenv()
-
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(module)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
-    )
-
     parser = argparse.ArgumentParser()
-    parser.add_argument("-pipeline")  # TODO Better keyword for processing ETLs
+    parser.add_argument("-p", "--process")
+    parser.add_argument("-s", "--schedule", action="store_true")
     args = parser.parse_args()
 
-    # TODO STAT-12 Create cron/scheduling process for ETLs
-    if args.pipeline == "ladder":
+    if args.process == "ladder":
+        get_ladders()
+    if args.process == "ladder_members":
+        get_ladder_members()
+    elif args.process == "ladder_results":
+        get_ladder_results()
+    elif args.process == "games":
+        create_games()
+    elif args.process == "all":
         get_ladders()
         get_ladder_members()
-    elif args.pipeline == "ladder_results":
         get_ladder_results()
-    elif args.pipeline == "game":
         create_games()
+    elif args.process:
+        logger.error(f"Unsupported pipeline arg. {args.pipeline=}")
 
-    else:
-        logging.error(f"Unsupported pipeline arg. {args.pipeline=}")
+    if args.schedule:
+        schedule.every(30).seconds.do(get_ladder_results)
+        schedule.every(5).minutes.do(get_ladders)
+        schedule.every(5).minutes.do(get_ladder_members)
+        schedule.every(5).minutes.do(create_games)
+
+        while True:
+            schedule.run_pending()
+            time.sleep(1)

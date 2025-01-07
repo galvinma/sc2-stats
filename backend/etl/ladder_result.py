@@ -2,11 +2,8 @@
 ETL processes associated with SC2 ladder results (MMR, Game duration, Etc.)
 """
 
-import concurrent
-import logging
 import time
 from datetime import datetime
-from multiprocessing.pool import ThreadPool
 
 from more_itertools import first, only
 
@@ -23,10 +20,13 @@ from backend.db.model import (
     Profile,
 )
 from backend.static import LADDER_BATCH_SIZE
-from backend.utils.concurrency_utils import thread_pool_max_workers
+from backend.utils.concurrency_utils import get_task_manager
 from backend.utils.datetime_utils import current_epoch_time
+from backend.utils.logging_utils import get_logger
 
 # TODO refactor this ETL for team types beyond 1v1
+
+logger = get_logger(__name__)
 
 
 def get_profile_ladder_wrapper(ladder_member):
@@ -68,7 +68,7 @@ def query_character(session, team_member):
             )
         )
     except ValueError:
-        logging.error(f"Found multiple character entries for {team_member=}")
+        logger.error(f"Found multiple character entries for {team_member=}")
 
     return None
 
@@ -82,7 +82,7 @@ def query_character_mmr(session, character, team_member):
             order_by=CharacterMMR.date.desc(),
         )
     except Exception:
-        logging.exception(f"Exception thrown querying for character MMR. {character=} {team_member=}")
+        logger.exception(f"Exception thrown querying for character MMR. {character=} {team_member=}")
 
     return None
 
@@ -125,14 +125,14 @@ def insert_match(session, profile, match):
 def process_ladder_team_member(session, ladder_team, team_member):
     character = query_character(session, team_member)
     if not character:
-        logging.warning(f"Unable to find character for {team_member=}")
+        logger.warning(f"Unable to find character for {team_member=}")
         return None
 
     character_mmr = query_character_mmr(session, character, team_member)
     db_mmr = first(character_mmr).mmr if len(character_mmr) > 0 else None
     ladder_mmr = ladder_team.mmr
     if not character_mmr or db_mmr != ladder_mmr:
-        logging.info(f"New MMR result for {character.display_name}:{character.profile_path}. {db_mmr} --> {ladder_mmr}")
+        logger.info(f"New MMR result for {character.display_name}:{character.profile_path}. {db_mmr} --> {ladder_mmr}")
         insert_character_mmr(session, character, ladder_team, team_member)
 
         # Fetch match history and calculate game duration if we have a baseline MMR
@@ -158,7 +158,7 @@ def process_profile_ladder_response(profile_ladder_response):
                 process_ladder_team_member(session, ladder_team, team_member)
 
 
-def process_profile_ladder(max_workers):
+def process_profile_ladder():
     processed = 0
     batch_start = time.time()
     with session_scope() as session:
@@ -175,36 +175,27 @@ def process_profile_ladder(max_workers):
             joins=[(Profile, Profile.id == LadderMember.profile_id), (Ladder, Ladder.id == LadderMember.ladder_id)],
             distinct={LadderMember.ladder_id},
         )
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(get_profile_ladder_wrapper, ladder_member): ladder_member
-                for ladder_member in ladder_members
-            }
 
-            for future in concurrent.futures.as_completed(futures):
-                if processed != 0 and processed % LADDER_BATCH_SIZE == 0:
-                    logging.info(
-                        f"Processed {processed} ladders. "
-                        f"Last batch took {round(time.time() - batch_start)} seconds."
-                    )
-                    batch_start = time.time()
+        for result, ladder_member in get_task_manager().yield_futures(get_profile_ladder_wrapper, ladder_members):
+            if processed != 0 and processed % LADDER_BATCH_SIZE == 0:
+                logger.info(
+                    f"Processed {processed} ladders. " f"Last batch took {round(time.time() - batch_start)} seconds."
+                )
+                batch_start = time.time()
 
-                profile_ladder_response = future.result()
-                profile_ladder_response.ladder_member = futures[future]
-                yield profile_ladder_response
-                processed += 1
+            result.ladder_member = ladder_member
+            yield result
+            processed += 1
 
 
 def get_ladder_results():
-    logging.info("Starting fetch of ladder results...")
+    logger.info("Starting fetch of ladder results...")
     ladders_processed = 0
     start = datetime.now()
-    max_workers = thread_pool_max_workers()
 
-    with ThreadPool(processes=int(max_workers / 2)) as pool:
-        for _ in pool.imap(process_profile_ladder_response, process_profile_ladder(max_workers=int(max_workers / 2))):
-            ladders_processed += 1
+    for _, _ in get_task_manager().yield_futures(process_profile_ladder_response, process_profile_ladder()):
+        ladders_processed += 1
 
     end = datetime.now()
-    logging.info(f"Processed a total of {ladders_processed} ladders.")
-    logging.info(f"Processing ladder results took {round(end.timestamp() - start.timestamp())} seconds.")
+    logger.info(f"Processed a total of {ladders_processed} ladders.")
+    logger.info(f"Processing ladder results took {round(end.timestamp() - start.timestamp())} seconds.")

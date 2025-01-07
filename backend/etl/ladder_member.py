@@ -2,8 +2,6 @@
 ETL processes associated with SC2 ladder members (Profile/Character)
 """
 
-import concurrent
-import logging
 import time
 from datetime import datetime
 
@@ -14,7 +12,10 @@ from backend.api.models.legacy import LegacyLadderResponse
 from backend.db.db import get_or_create, query, session_scope, upsert
 from backend.db.model import Character, Ladder, LadderMember, Profile
 from backend.static import LADDER_BATCH_SIZE
-from backend.utils.concurrency_utils import thread_pool_max_workers
+from backend.utils.concurrency_utils import get_task_manager
+from backend.utils.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 def get_legacy_ladder_wrapper(ladder):
@@ -30,25 +31,20 @@ def process_ladder():
 
     with session_scope() as session:
         ladders = query(session, params={Ladder})
-        with concurrent.futures.ThreadPoolExecutor(max_workers=thread_pool_max_workers()) as executor:
-            futures = {executor.submit(get_legacy_ladder_wrapper, ladder): ladder for ladder in ladders}
+        for result, ladder in get_task_manager().yield_futures(get_legacy_ladder_wrapper, ladders):
+            if processed != 0 and processed % LADDER_BATCH_SIZE == 0:
+                logger.info(
+                    f"Processed {processed} ladders. " f"Last batch took {round(time.time() - batch_start)} seconds."
+                )
+                batch_start = time.time()
 
-            for future in concurrent.futures.as_completed(futures):
-                if processed != 0 and processed % LADDER_BATCH_SIZE == 0:
-                    logging.info(
-                        f"Processed {processed} ladders. "
-                        f"Last batch took {round(time.time() - batch_start)} seconds."
-                    )
-                    batch_start = time.time()
-
-                ladder_response = future.result()
-                ladder_response.ladder = futures[future]
-                yield ladder_response
-                processed += 1
+            result.ladder = ladder
+            yield result
+            processed += 1
 
 
 def get_ladder_members():
-    logging.info("Starting fetch of ladder members (characters)...")
+    logger.info("Starting fetch of ladder members (characters)...")
     start = datetime.now()
     processed_ladder_members = 0
     for ladder_response in process_ladder():
@@ -111,5 +107,5 @@ def get_ladder_members():
             processed_ladder_members += 1
 
     end = datetime.now()
-    logging.info(f"Processed {processed_ladder_members} ladder members.")
-    logging.info(f"Processing characters took {round(end.timestamp() - start.timestamp())} seconds.")
+    logger.info(f"Processed {processed_ladder_members} ladder members.")
+    logger.info(f"Processing characters took {round(end.timestamp() - start.timestamp())} seconds.")
