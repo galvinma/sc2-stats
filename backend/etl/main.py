@@ -35,8 +35,6 @@ if __name__ == "__main__":
         get_ladder_members()
         get_ladder_results()
         create_games()
-    elif args.process:
-        logger.error(f"Unsupported pipeline arg. {args.pipeline=}")
 
     if args.schedule:
         schedule.every(30).seconds.do(get_ladder_results)
