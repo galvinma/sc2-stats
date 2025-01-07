@@ -2,8 +2,6 @@
 ETL processes associated with SC2 ladders
 """
 
-import concurrent
-import logging
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -13,7 +11,10 @@ from backend.api.models.ladder import SeasonResponse
 from backend.db.db import get_or_create, session_scope, upsert
 from backend.db.model import Ladder, League
 from backend.enums import LeagueId, QueueId, RegionId, TeamType
-from backend.utils.concurrency_utils import thread_pool_max_workers
+from backend.utils.concurrency_utils import get_task_manager
+from backend.utils.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -39,7 +40,6 @@ def get_league_wrapper(league_future):
 
 
 def process_leagues():
-    max_workers = thread_pool_max_workers()
     api = BlizzardApi()
     leagues = []
     for region in RegionId:
@@ -57,18 +57,13 @@ def process_leagues():
                         )
                     )
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(get_league_wrapper, league): league for league in leagues}
-        for future in concurrent.futures.as_completed(futures):
-
-            league_future = futures[future]
-            league_response = future.result()
-            league_response.region_id = league_future.region_id
-            yield future.result()
+    for result, league in get_task_manager().yield_futures(get_league_wrapper, leagues):
+        result.region_id = league.region_id
+        yield result
 
 
 def get_ladders():
-    logging.info("Starting fetch of current leagues and ladders...")
+    logger.info("Starting fetch of current leagues and ladders...")
     start = datetime.now()
     for league_response in process_leagues():
         with session_scope() as session:
@@ -112,4 +107,4 @@ def get_ladders():
                     )
 
     end = datetime.now()
-    logging.info(f"Updating leagues and ladders took {round(end.timestamp() - start.timestamp())} seconds.")
+    logger.info(f"Updating leagues and ladders took {round(end.timestamp() - start.timestamp())} seconds.")

@@ -1,8 +1,13 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+# Paths
+APPLICATION_LOG_PATH = Path("/app/log/sc2_stats.log")
 
 # API
 BLIZZARD_OATH_BASE = "https://oauth.battle.net"

@@ -3,7 +3,6 @@ https://develop.battle.net/documentation/starcraft-2/game-data-apis
 https://develop.battle.net/documentation/starcraft-2/community-apis
 """
 
-import logging
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -17,6 +16,9 @@ from backend.static import (
     BLIZZARD_CLIENT_SECRET,
     BLIZZARD_OATH_BASE,
 )
+from backend.utils.logging_utils import get_logger
+
+logger = get_logger(__name__)
 
 
 class BlizzardApi:
@@ -36,7 +38,7 @@ class BlizzardApi:
                     BlizzardApi.oauth_token = res["access_token"]
                     BlizzardApi.oauth_token_expiration = datetime.now() + timedelta(0, int(res["expires_in"]))
             except Exception:
-                logging.exception("Exception thrown while POSTing for oauth token...")
+                logger.exception("Exception thrown while POSTing for oauth token...")
 
             return func(*args, **kwargs)
 
@@ -60,25 +62,25 @@ class BlizzardApi:
         wait=wait_fixed(2),
     )
     def _get(self, url):
-        logging.info(f"Sending GET request to {url=}")
+        logger.info(f"Sending GET request to {url=}")
         res = requests.get(url, headers=BlizzardApi.headers())
         if res.ok:
             return res.json()
 
         if res.status_code == 503:
-            logging.error(f"Service Unavailable. {res.status_code=}, {res.reason=}, {url=}")
+            logger.error(f"Service Unavailable. {res.status_code=}, {res.reason=}, {url=}")
             return {}
 
         if res.status_code == 429:
-            logging.warning("Too May Requests. Will wait and retry...")
+            logger.warning("Too May Requests. Will wait and retry...")
             raise Exception
 
         if res.status_code == 404:
-            logging.error(f"Not found. {res.status_code=}, {res.reason=}, {url=}")
+            logger.error(f"Not found. {res.status_code=}, {res.reason=}, {url=}")
             return {}
 
         if res.status_code >= 400:
-            logging.error(f"Failed GET. {res.status_code=}, {res.reason=}, {url=}. Will retry...")
+            logger.error(f"Failed GET. {res.status_code=}, {res.reason=}, {url=}. Will retry...")
             raise Exception
 
         return {}
@@ -87,7 +89,7 @@ class BlizzardApi:
         try:
             return self._get(url=url)
         except RetryError:
-            logging.error(f"Exceeded retries fetching {url=}")
+            logger.error(f"Exceeded retries fetching {url=}")
             return {}
 
     # Game Data API

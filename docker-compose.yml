@@ -4,6 +4,7 @@ services:
     image: sc2-stats-backend:latest
     volumes:
       - .env:/app/.env
+      - ./log:/app/log
       - ./backend:/app/backend
     networks:
       - sc2-stats-network

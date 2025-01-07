@@ -2,7 +2,6 @@
 ETL processes associated with SC2 ladder games
 """
 
-import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -10,8 +9,12 @@ from backend.db.db import insert, query, session_scope
 from backend.db.model import Game, Match
 from backend.static import MATCH_LOOKBACK_MAX, MATCH_LOOKBACK_MIN, MATCH_LOOKUP_KEY
 from backend.utils.datetime_utils import datetime_to_epoch
+from backend.utils.logging_utils import get_logger
 
 # TODO refactor pairing logic to support game modes other than 1V1
+
+
+logger = get_logger(__name__)
 
 
 def query_unpaired_matches(session):
@@ -46,7 +49,7 @@ def pair_matches():
     lookup = defaultdict(list)
     with session_scope() as session:
         matches = query_unpaired_matches(session)
-        logging.info(f"Found {len(matches)} unpaired recent matches...")
+        logger.info(f"Found {len(matches)} unpaired recent matches...")
         for match in matches:
             key = MATCH_LOOKUP_KEY.format(map=match.map, type=match.type, date=match.date, speed=match.speed)
             lookup[key].append(match)
@@ -67,17 +70,18 @@ def pair_matches():
                 continue
 
             if len(matches) == 2:
+                # TODO Validate number of wins/losses
                 paired += 1
                 insert_game(session, matches)
 
-    logging.info(f"Paired {paired} matches.")
-    logging.info(f"{waiting_pair} matches still waiting for results.")
-    logging.info(f"{conflict} matches have a pairing conflict.")
+    logger.info(f"Paired {paired} matches.")
+    logger.info(f"{waiting_pair} matches still waiting for results.")
+    logger.info(f"{conflict} matches have a pairing conflict.")
 
 
 def create_games():
-    logging.info("Starting analysis of recent matches. Will attempt to merge matches into games...")
+    logger.info("Starting analysis of recent matches. Will attempt to merge matches into games...")
     start = datetime.now()
     pair_matches()
     end = datetime.now()
-    logging.info(f"Processing recent matches took {round(end.timestamp() - start.timestamp())} seconds.")
+    logger.info(f"Processing recent matches took {round(end.timestamp() - start.timestamp())} seconds.")
