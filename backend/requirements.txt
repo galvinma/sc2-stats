@@ -6,3 +6,4 @@ psycopg2==2.9.10
 pydantic==2.10.4
 more-itertools==10.5.0
 tenacity==9.0.0
+schedule==1.2.2

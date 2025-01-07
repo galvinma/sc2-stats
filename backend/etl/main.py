@@ -1,5 +1,7 @@
 import argparse
+import time
 
+import schedule
 from dotenv import load_dotenv
 
 from backend.etl.game import create_games
@@ -16,17 +18,32 @@ logger = get_logger(__name__)
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-pipeline")  # TODO Better keyword for processing ETLs
+    parser.add_argument("-p", "--process")
+    parser.add_argument("-s", "--schedule", action="store_true")
     args = parser.parse_args()
 
-    # TODO STAT-12 Create cron/scheduling process for ETLs
-    if args.pipeline == "ladder":
+    if args.process == "ladder":
+        get_ladders()
+    if args.process == "ladder_members":
+        get_ladder_members()
+    elif args.process == "ladder_results":
+        get_ladder_results()
+    elif args.process == "games":
+        create_games()
+    elif args.process == "all":
         get_ladders()
         get_ladder_members()
-    elif args.pipeline == "ladder_results":
         get_ladder_results()
-    elif args.pipeline == "game":
         create_games()
-
-    else:
+    elif args.process:
         logger.error(f"Unsupported pipeline arg. {args.pipeline=}")
+
+    if args.schedule:
+        schedule.every(30).seconds.do(get_ladder_results)
+        schedule.every(5).minutes.do(get_ladders)
+        schedule.every(5).minutes.do(get_ladder_members)
+        schedule.every(5).minutes.do(create_games)
+
+        while True:
+            schedule.run_pending()
+            time.sleep(1)
