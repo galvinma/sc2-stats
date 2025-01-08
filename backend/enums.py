@@ -14,7 +14,7 @@ class RealmId(Enum):
     US = 1
     LatAm = 2
     Europe = 1
-    RUssia = 2
+    Russia = 2
     Korea = 1
     # Taiwan = 2
     # China = 1

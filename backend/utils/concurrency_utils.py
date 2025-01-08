@@ -10,7 +10,7 @@ TASK_MANAGER = None
 
 
 def thread_pool_max_workers():
-    max_threads = os.cpu_count() * 5
+    max_threads = os.cpu_count() * 10
     logger.info(f"Will submit tasks with {max_threads=}")
     return max_threads
 

@@ -85,3 +85,4 @@ def create_games():
     pair_matches()
     end = datetime.now()
     logger.info(f"Processing recent matches took {round(end.timestamp() - start.timestamp())} seconds.")
+    logger.info("Done with analysis of recent matches.")

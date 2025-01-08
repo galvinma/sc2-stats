@@ -2,13 +2,15 @@ import os
 from contextlib import contextmanager
 
 from dotenv import load_dotenv
-from more_itertools import only
 from sqlalchemy import create_engine
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 load_dotenv()
 
 engine = create_engine(os.environ.get("PG_URI"))
+
+# TODO constraint names to static
 
 
 @contextmanager
@@ -44,30 +46,33 @@ def query(session, params, joins=None, filters=None, distinct=None, order_by=Non
     return stmt.all()
 
 
-def upsert(session, model, filter, values):
-    instance = only(session.query(model).filter_by(**filter).all())
-    if instance:
-        for key, value in values.items():
-            setattr(instance, key, value)
-    else:
-        instance = model(**values)
+def insert_stmt(model, values, returning=None):
+    stmt = insert(model).values(values)
 
-    session.add(instance)
-    session.commit()
-    return instance
+    if returning:
+        stmt = stmt.returning(returning)
+
+    return stmt
 
 
-def insert(session, model, values):
-    instance = model(**values)
-    session.add(instance)
-    session.commit()
-    return instance
+def bulk_insert(session, stmt, constraint):
+    session.execute(
+        stmt.on_conflict_do_nothing(
+            constraint=constraint,
+        )
+    )
+
+
+def bulk_upsert(session, stmt, constraint, set_):
+    session.execute(
+        stmt.on_conflict_do_update(
+            constraint=constraint,
+            set_=set_,
+        )
+    )
 
 
 def get_or_create(session, model, filter, values):
-    """
-    https://stackoverflow.com/questions/2546207/does-sqlalchemy-have-an-equivalent-of-djangos-get-or-create
-    """
     instance = session.query(model).filter_by(**filter).first()
     if instance:
         return instance
@@ -76,3 +81,7 @@ def get_or_create(session, model, filter, values):
     session.add(instance)
     session.commit()
     return instance
+
+
+def orm_classes_as_dict(iterable):
+    return [target.as_dict() for target in iterable]
