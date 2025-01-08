@@ -26,7 +26,11 @@ from backend.db.model import (
     Match,
     Profile,
 )
-from backend.static import LADDER_BATCH_SIZE
+from backend.static import (
+    CHARACTER_MMR_UNIQUE_CONSTRAINT,
+    LADDER_BATCH_SIZE,
+    MATCH_UNIQUE_CONSTRAINT,
+)
 from backend.utils.concurrency_utils import get_task_manager
 from backend.utils.datetime_utils import current_epoch_time
 from backend.utils.logging_utils import get_logger
@@ -205,7 +209,7 @@ def get_ladder_results():
             bulk_insert(
                 session,
                 stmt=stmt,
-                constraint="character_mmr_unique_constraint",
+                constraint=CHARACTER_MMR_UNIQUE_CONSTRAINT,
             )
 
         if matches:
@@ -213,7 +217,7 @@ def get_ladder_results():
             bulk_insert(
                 session,
                 stmt=stmt,
-                constraint="match_unique_constraint",
+                constraint=MATCH_UNIQUE_CONSTRAINT,
             )
 
     end = datetime.now()

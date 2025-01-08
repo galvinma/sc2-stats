@@ -10,8 +10,6 @@ load_dotenv()
 
 engine = create_engine(os.environ.get("PG_URI"))
 
-# TODO constraint names to static
-
 
 @contextmanager
 def session_scope():

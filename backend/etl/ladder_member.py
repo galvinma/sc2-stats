@@ -17,7 +17,11 @@ from backend.db.db import (
     session_scope,
 )
 from backend.db.model import Character, Ladder, LadderMember, Profile
-from backend.static import LADDER_BATCH_SIZE
+from backend.static import (
+    CHARACTER_UNIQUE_CONSTRAINT,
+    LADDER_BATCH_SIZE,
+    LADDER_MEMBER_UNIQUE_CONSTRAINT,
+)
 from backend.utils.concurrency_utils import get_task_manager
 from backend.utils.logging_utils import get_logger
 
@@ -112,7 +116,7 @@ def get_ladder_members():
         bulk_upsert(
             session,
             stmt=stmt,
-            constraint="character_unique_constraint",
+            constraint=CHARACTER_UNIQUE_CONSTRAINT,
             set_={
                 "clan_name": stmt.excluded.clan_name,
                 "clan_tag": stmt.excluded.clan_tag,
@@ -124,7 +128,7 @@ def get_ladder_members():
         bulk_upsert(
             session,
             stmt=stmt,
-            constraint="ladder_member_unique_constraint",
+            constraint=LADDER_MEMBER_UNIQUE_CONSTRAINT,
             set_={
                 "points": stmt.excluded.points,
                 "wins": stmt.excluded.wins,

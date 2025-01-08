@@ -18,6 +18,7 @@ from backend.db.db import (
 )
 from backend.db.model import Ladder, League
 from backend.enums import LeagueId, QueueId, RegionId, TeamType
+from backend.static import LADDER_UNIQUE_CONSTRAINT
 from backend.utils.concurrency_utils import get_task_manager
 from backend.utils.logging_utils import get_logger
 
@@ -116,7 +117,7 @@ def get_ladders():
                 bulk_upsert(
                     session,
                     stmt=stmt,
-                    constraint="ladder_unique_constraint",
+                    constraint=LADDER_UNIQUE_CONSTRAINT,
                     set_={
                         "min_rating": stmt.excluded.min_rating,
                         "max_rating": stmt.excluded.max_rating,
