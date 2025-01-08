@@ -24,3 +24,12 @@ MATCH_LOOKBACK_MIN = 3600 * 7  # Maximum game time 6hours, 30mins, 6seconds. Rou
 LADDER_BATCH_SIZE = 50
 PROFILE_BATCH_SIZE = 500
 MATCH_BATCH_SIZE = 5000
+
+# Constraints
+LEAGUE_UNIQUE_CONSTRAINT = "league_unique_constraint"
+LADDER_UNIQUE_CONSTRAINT = "ladder_unique_constraint"
+LADDER_MEMBER_UNIQUE_CONSTRAINT = "ladder_member_unique_constraint"
+CHARACTER_MMR_UNIQUE_CONSTRAINT = "character_mmr_unique_constraint"
+CHARACTER_UNIQUE_CONSTRAINT = "character_unique_constraint"
+PROFILE_UNIQUE_CONSTRAINT = "profile_unique_constraint"
+MATCH_UNIQUE_CONSTRAINT = "match_unique_constraint"

@@ -3,6 +3,7 @@ ETL processes associated with SC2 ladder results (MMR, Game duration, Etc.)
 """
 
 import time
+import uuid
 from datetime import datetime
 
 from more_itertools import first, only
@@ -10,7 +11,13 @@ from more_itertools import first, only
 from backend.api.blizzard import BlizzardApi
 from backend.api.models.legacy import LegacyMatchHistoryResponse
 from backend.api.models.profile import ProfileLadderResponse
-from backend.db.db import get_or_create, insert, query, session_scope
+from backend.db.db import (
+    bulk_insert,
+    insert_stmt,
+    orm_classes_as_dict,
+    query,
+    session_scope,
+)
 from backend.db.model import (
     Character,
     CharacterMMR,
@@ -19,7 +26,11 @@ from backend.db.model import (
     Match,
     Profile,
 )
-from backend.static import LADDER_BATCH_SIZE
+from backend.static import (
+    CHARACTER_MMR_UNIQUE_CONSTRAINT,
+    LADDER_BATCH_SIZE,
+    MATCH_UNIQUE_CONSTRAINT,
+)
 from backend.utils.concurrency_utils import get_task_manager
 from backend.utils.datetime_utils import current_epoch_time
 from backend.utils.logging_utils import get_logger
@@ -87,75 +98,66 @@ def query_character_mmr(session, character, team_member):
     return None
 
 
-def insert_character_mmr(session, character, ladder_team, team_member):
-    insert(
-        session,
-        model=CharacterMMR,
-        values={
-            "race": team_member.race,
-            "mmr": ladder_team.mmr,
-            "date": current_epoch_time(),
-            "character_id": character.id,
-            "character": character,
-        },
-    )
-
-
-def insert_match(session, profile, match):
-    return get_or_create(
-        session=session,
-        model=Match,
-        filter={
-            "profile_id": profile.id,
-            "date": match.date,
-        },
-        values={
-            "date": match.date,
-            "map": match.map,
-            "type": match.type,
-            "decision": match.decision,
-            "speed": match.speed,
-            "duration": current_epoch_time() - match.date,
-            "profile_id": profile.id,
-            "profile": profile,
-        },
-    )
-
-
-def process_ladder_team_member(session, ladder_team, team_member):
-    character = query_character(session, team_member)
-    if not character:
-        logger.warning(f"Unable to find character for {team_member=}")
-        return None
-
-    character_mmr = query_character_mmr(session, character, team_member)
-    db_mmr = first(character_mmr).mmr if len(character_mmr) > 0 else None
-    ladder_mmr = ladder_team.mmr
-    if not character_mmr or db_mmr != ladder_mmr:
-        logger.info(f"New MMR result for {character.display_name}:{character.profile_path}. {db_mmr} --> {ladder_mmr}")
-        insert_character_mmr(session, character, ladder_team, team_member)
-
-        # Fetch match history and calculate game duration if we have a baseline MMR
-        if db_mmr is not None:
-            profile = character.profile
-            match_history_response = get_match_history_wrapper(profile)
-            if match_history_response.matches:
-                matches = sorted(match_history_response.matches, key=lambda match: match.date, reverse=True)
-                match = first(matches)
-                insert_match(session, profile, match)
-
-
 def process_profile_ladder_response(profile_ladder_response):
-    for ladder_team in profile_ladder_response.ladder_teams:
-        if not ladder_team.mmr:
-            continue
-
-        for team_member in ladder_team.team_members:
-            if not team_member.race:
+    with session_scope() as session:
+        character_mmrs = []
+        matches = []
+        for ladder_team in profile_ladder_response.ladder_teams:
+            if not ladder_team.mmr:
                 continue
 
-            with session_scope() as session:
-                process_ladder_team_member(session, ladder_team, team_member)
+            for team_member in ladder_team.team_members:
+                if not team_member.race:
+                    continue
+
+                character = query_character(session, team_member)
+                if not character:
+                    logger.warning(f"Unable to find character for {team_member=}")
+                    continue
+
+                character_mmr = query_character_mmr(session, character, team_member)
+                db_mmr = first(character_mmr).mmr if len(character_mmr) > 0 else None
+                ladder_mmr = ladder_team.mmr
+                if not character_mmr or db_mmr != ladder_mmr:
+                    logger.info(
+                        f"New MMR result for {character.display_name}:{character.profile_path}. "
+                        + f"{db_mmr} --> {ladder_mmr}"
+                    )
+                    character_mmrs.append(
+                        CharacterMMR(
+                            **{
+                                "id": uuid.uuid4(),
+                                "race": team_member.race,
+                                "mmr": ladder_team.mmr,
+                                "date": current_epoch_time(),
+                                "character_id": character.id,
+                            }
+                        )
+                    )
+
+                    if db_mmr is not None:
+                        profile = character.profile
+                        match_history_response = get_match_history_wrapper(profile)
+                        if match_history_response.matches:
+                            match = first(
+                                sorted(match_history_response.matches, key=lambda match: match.date, reverse=True)
+                            )
+                            matches.append(
+                                Match(
+                                    **{
+                                        "id": uuid.uuid4(),
+                                        "date": match.date,
+                                        "map": match.map,
+                                        "type": match.type,
+                                        "decision": match.decision,
+                                        "speed": match.speed,
+                                        "duration": current_epoch_time() - match.date,
+                                        "profile_id": profile.id,
+                                    }
+                                )
+                            )
+
+        return (matches, character_mmrs)
 
 
 def process_profile_ladder():
@@ -193,9 +195,32 @@ def get_ladder_results():
     ladders_processed = 0
     start = datetime.now()
 
-    for _, _ in get_task_manager().yield_futures(process_profile_ladder_response, process_profile_ladder()):
+    matches = []
+    character_mmrs = []
+    for res, _ in get_task_manager().yield_futures(process_profile_ladder_response, process_profile_ladder()):
         ladders_processed += 1
+        ladder_matches, ladder_character_mmrs = res
+        matches = matches + ladder_matches
+        character_mmrs = character_mmrs + ladder_character_mmrs
+
+    with session_scope() as session:
+        if character_mmrs:
+            stmt = insert_stmt(model=CharacterMMR, values=orm_classes_as_dict(character_mmrs))
+            bulk_insert(
+                session,
+                stmt=stmt,
+                constraint=CHARACTER_MMR_UNIQUE_CONSTRAINT,
+            )
+
+        if matches:
+            stmt = insert_stmt(model=Match, values=orm_classes_as_dict(matches))
+            bulk_insert(
+                session,
+                stmt=stmt,
+                constraint=MATCH_UNIQUE_CONSTRAINT,
+            )
 
     end = datetime.now()
     logger.info(f"Processed a total of {ladders_processed} ladders.")
     logger.info(f"Processing ladder results took {round(end.timestamp() - start.timestamp())} seconds.")
+    logger.info("Done with fetch of ladder results.")

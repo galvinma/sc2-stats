@@ -2,15 +2,23 @@
 ETL processes associated with SC2 ladders
 """
 
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
 from backend.api.blizzard import BlizzardApi
 from backend.api.models.game_data import LeagueResponse
 from backend.api.models.ladder import SeasonResponse
-from backend.db.db import get_or_create, session_scope, upsert
+from backend.db.db import (
+    bulk_upsert,
+    get_or_create,
+    insert_stmt,
+    orm_classes_as_dict,
+    session_scope,
+)
 from backend.db.model import Ladder, League
 from backend.enums import LeagueId, QueueId, RegionId, TeamType
+from backend.static import LADDER_UNIQUE_CONSTRAINT
 from backend.utils.concurrency_utils import get_task_manager
 from backend.utils.logging_utils import get_logger
 
@@ -65,46 +73,58 @@ def process_leagues():
 def get_ladders():
     logger.info("Starting fetch of current leagues and ladders...")
     start = datetime.now()
-    for league_response in process_leagues():
-        with session_scope() as session:
-            league = get_or_create(
-                session,
-                model=League,
-                filter={
-                    "region_id": league_response.region_id,
-                    "league_id": league_response.key.league_id,
-                    "season_id": league_response.key.season_id,
-                    "queue_id": league_response.key.queue_id,
-                    "team_type": league_response.key.team_type,
-                },
-                values={
-                    "region_id": league_response.region_id,
-                    "league_id": league_response.key.league_id,
-                    "season_id": league_response.key.season_id,
-                    "queue_id": league_response.key.queue_id,
-                    "team_type": league_response.key.team_type,
-                },
-            )
 
-            for league_tier in league_response.tier:
-                for league_division in league_tier.division:
-                    upsert(
-                        session,
-                        model=Ladder,
-                        filter={
-                            "region_id": league_response.region_id,
-                            "ladder_id": league_division.ladder_id,
-                            "league_id": league.id,
-                        },
-                        values={
-                            "ladder_id": league_division.ladder_id,
-                            "region_id": league_response.region_id,
-                            "min_rating": league_tier.min_rating,
-                            "max_rating": league_tier.max_rating,
-                            "member_count": league_division.member_count,
-                            "league_id": league.id,
-                        },
-                    )
+    with session_scope() as session:
+        for league_response in process_leagues():
+            if league_response and league_response.key:
+                league = get_or_create(
+                    session,
+                    model=League,
+                    filter={
+                        "region_id": league_response.region_id,
+                        "league_id": league_response.key.league_id,
+                        "season_id": league_response.key.season_id,
+                        "queue_id": league_response.key.queue_id,
+                        "team_type": league_response.key.team_type,
+                    },
+                    values={
+                        "region_id": league_response.region_id,
+                        "league_id": league_response.key.league_id,
+                        "season_id": league_response.key.season_id,
+                        "queue_id": league_response.key.queue_id,
+                        "team_type": league_response.key.team_type,
+                    },
+                )
+
+                ladders = []
+                for league_tier in league_response.tier:
+                    for league_division in league_tier.division:
+                        ladders.append(
+                            Ladder(
+                                **{
+                                    "id": uuid.uuid4(),
+                                    "ladder_id": league_division.ladder_id,
+                                    "region_id": league_response.region_id,
+                                    "min_rating": league_tier.min_rating,
+                                    "max_rating": league_tier.max_rating,
+                                    "member_count": league_division.member_count,
+                                    "league_id": league.id,
+                                }
+                            ),
+                        )
+            if ladders:
+                stmt = insert_stmt(model=Ladder, values=orm_classes_as_dict(ladders))
+                bulk_upsert(
+                    session,
+                    stmt=stmt,
+                    constraint=LADDER_UNIQUE_CONSTRAINT,
+                    set_={
+                        "min_rating": stmt.excluded.min_rating,
+                        "max_rating": stmt.excluded.max_rating,
+                        "member_count": stmt.excluded.member_count,
+                    },
+                )
 
     end = datetime.now()
     logger.info(f"Updating leagues and ladders took {round(end.timestamp() - start.timestamp())} seconds.")
+    logger.info("Done with fetch of current leagues and ladders.")

@@ -5,10 +5,22 @@ from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from backend.enums import Race
+from backend.static import (
+    CHARACTER_MMR_UNIQUE_CONSTRAINT,
+    CHARACTER_UNIQUE_CONSTRAINT,
+    LADDER_MEMBER_UNIQUE_CONSTRAINT,
+    LADDER_UNIQUE_CONSTRAINT,
+    LEAGUE_UNIQUE_CONSTRAINT,
+    MATCH_UNIQUE_CONSTRAINT,
+    PROFILE_UNIQUE_CONSTRAINT,
+)
 
 
 class Base(DeclarativeBase):
     pass
+
+    def as_dict(self):
+        return {field.name: getattr(self, field.name) for field in self.__table__.c}
 
 
 class League(Base):
@@ -23,7 +35,7 @@ class League(Base):
 
     ladders: Mapped[List["Ladder"]] = relationship(back_populates="league")
 
-    UniqueConstraint(league_id, region_id, season_id, queue_id, team_type)
+    UniqueConstraint(league_id, region_id, season_id, queue_id, team_type, name=LEAGUE_UNIQUE_CONSTRAINT)
 
     def __repr__(self) -> str:
         return (
@@ -51,7 +63,7 @@ class Ladder(Base):
     league: Mapped[League] = relationship(back_populates="ladders")
     ladder_members: Mapped[List["LadderMember"]] = relationship(back_populates="ladder")
 
-    UniqueConstraint(league_id, ladder_id, region_id)
+    UniqueConstraint(league_id, ladder_id, region_id, name=LADDER_UNIQUE_CONSTRAINT)
 
     def __repr__(self) -> str:
         return (
@@ -82,7 +94,7 @@ class LadderMember(Base):
     ladder_id = mapped_column(ForeignKey("ladder.id"))
     ladder: Mapped["Ladder"] = relationship(back_populates="ladder_members")
 
-    UniqueConstraint(profile_id, ladder_id, join_timestamp)
+    UniqueConstraint(profile_id, ladder_id, join_timestamp, name=LADDER_MEMBER_UNIQUE_CONSTRAINT)
 
     def __repr__(self) -> str:
         return (
@@ -111,7 +123,7 @@ class CharacterMMR(Base):
     character_id = mapped_column(ForeignKey("character.id"))
     character: Mapped["Character"] = relationship(back_populates="character_mmrs")
 
-    UniqueConstraint(character_id, race, mmr, date)
+    UniqueConstraint(character_id, race, mmr, date, name=CHARACTER_MMR_UNIQUE_CONSTRAINT)
 
     def __repr__(self) -> str:
         return (
@@ -137,7 +149,7 @@ class Character(Base):
     profile: Mapped["Profile"] = relationship(back_populates="characters")
     character_mmrs: Mapped[List["CharacterMMR"]] = relationship(back_populates="character")
 
-    UniqueConstraint(profile_id, display_name)
+    UniqueConstraint(profile_id, display_name, name=CHARACTER_UNIQUE_CONSTRAINT)
 
     def __repr__(self) -> str:
         return (
@@ -163,7 +175,7 @@ class Profile(Base):
     characters: Mapped[List["Character"]] = relationship(back_populates="profile")
     ladder_members: Mapped[List["LadderMember"]] = relationship(back_populates="profile")
 
-    UniqueConstraint(profile_id, realm_id, region_id)
+    UniqueConstraint(profile_id, realm_id, region_id, name=PROFILE_UNIQUE_CONSTRAINT)
 
     def __repr__(self) -> str:
         return (
@@ -201,7 +213,7 @@ class Match(Base):
     game_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("game.id"))
     game: Mapped[Game] = relationship(back_populates="matches")
 
-    UniqueConstraint(profile_id, date)
+    UniqueConstraint(profile_id, date, name=MATCH_UNIQUE_CONSTRAINT)
 
     def __repr__(self) -> str:
         return (
