@@ -5,7 +5,7 @@ ETL processes associated with SC2 ladder games
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-from backend.db.db import insert, query, session_scope
+from backend.db.db import get_or_create, query, session_scope
 from backend.db.model import Game, Match
 from backend.static import MATCH_LOOKBACK_MAX, MATCH_LOOKBACK_MIN, MATCH_LOOKUP_KEY
 from backend.utils.datetime_utils import datetime_to_epoch
@@ -32,11 +32,7 @@ def query_unpaired_matches(session):
 def insert_game(session, matches):
     durations = [match.duration for match in matches if match.duration is not None]
     duration_average = sum(durations) / len(durations) if durations else None
-    game = insert(
-        session,
-        model=Game,
-        values={"duration": duration_average},
-    )
+    game = get_or_create(session, model=Game, values={"duration": duration_average}, filter={})
     for match in matches:
         match.game_id = game.id
         match.game = game

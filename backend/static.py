@@ -14,6 +14,8 @@ BLIZZARD_OATH_BASE = "https://oauth.battle.net"
 BLIZZARD_API_BASE = "https://{region}.api.blizzard.com"
 BLIZZARD_CLIENT_ID = os.environ.get("BLIZZARD_CLIENT_ID")
 BLIZZARD_CLIENT_SECRET = os.environ.get("BLIZZARD_CLIENT_SECRET")
+REQUEST_MAX_PER_SECOND = 100
+REQUEST_MAX_PER_DAY = 36000
 
 # Match
 MATCH_LOOKUP_KEY = "{map}_{type}_{date}_{speed}"
