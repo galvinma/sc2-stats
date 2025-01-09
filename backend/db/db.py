@@ -6,9 +6,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
+from backend.utils.concurrency_utils import thread_pool_max_workers
+
 load_dotenv()
 
-engine = create_engine(os.environ.get("PG_URI"))
+engine = create_engine(
+    os.environ.get("PG_URI"),
+    pool_size=thread_pool_max_workers(),
+    max_overflow=int(thread_pool_max_workers() * 0.1),
+    pool_timeout=60,
+)
 
 
 @contextmanager

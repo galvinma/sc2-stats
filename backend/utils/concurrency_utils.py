@@ -1,6 +1,6 @@
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Semaphore
+from threading import Semaphore, Thread
 
 from backend.utils.logging_utils import get_logger
 
@@ -10,9 +10,15 @@ TASK_MANAGER = None
 
 
 def thread_pool_max_workers():
-    max_threads = os.cpu_count() * 10
+    max_threads = max(32, os.cpu_count() * 5)
     logger.info(f"Will submit tasks with {max_threads=}")
     return max_threads
+
+
+def run_threaded(job_func):
+    job_thread = Thread(target=job_func)
+    job_thread.start()
+    return job_thread
 
 
 class TaskManager:
