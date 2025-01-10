@@ -6,20 +6,24 @@ from sqlalchemy import create_engine
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from backend.utils.concurrency_utils import thread_pool_max_workers
+from backend.utils.concurrency import thread_pool_max_workers
 
 load_dotenv()
 
-engine = create_engine(
-    os.environ.get("PG_URI"),
-    pool_size=thread_pool_max_workers(),
-    max_overflow=int(thread_pool_max_workers() * 0.1),
-    pool_timeout=60,
-)
+
+def get_engine():
+    workers = thread_pool_max_workers()
+    return create_engine(
+        os.environ.get("PG_URI"),
+        pool_size=workers,
+        max_overflow=int(workers * 0.1),
+        pool_timeout=30,
+    )
 
 
 @contextmanager
 def session_scope():
+    engine = get_engine()
     session = Session(bind=engine)
     try:
         yield session

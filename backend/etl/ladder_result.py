@@ -31,9 +31,9 @@ from backend.static import (
     LADDER_BATCH_SIZE,
     MATCH_UNIQUE_CONSTRAINT,
 )
-from backend.utils.concurrency_utils import get_task_manager
-from backend.utils.datetime_utils import current_epoch_time
-from backend.utils.logging_utils import get_logger
+from backend.utils.concurrency import TaskManager
+from backend.utils.datetime import current_epoch_time
+from backend.utils.log import get_logger
 
 # TODO refactor this ETL for team types beyond 1v1
 
@@ -135,27 +135,27 @@ def process_profile_ladder_response(profile_ladder_response):
                         )
                     )
 
-                    if db_mmr is not None:
-                        profile = character.profile
-                        match_history_response = get_match_history_wrapper(profile)
-                        if match_history_response.matches:
-                            match = first(
-                                sorted(match_history_response.matches, key=lambda match: match.date, reverse=True)
-                            )
-                            matches.append(
-                                Match(
-                                    **{
-                                        "id": uuid.uuid4(),
-                                        "date": match.date,
-                                        "map": match.map,
-                                        "type": match.type,
-                                        "decision": match.decision,
-                                        "speed": match.speed,
-                                        "duration": current_epoch_time() - match.date,
-                                        "profile_id": profile.id,
-                                    }
-                                )
-                            )
+                    # if db_mmr is not None:
+                    #     profile = character.profile
+                    #     match_history_response = get_match_history_wrapper(profile)
+                    #     if match_history_response.matches:
+                    #         match = first(
+                    #             sorted(match_history_response.matches, key=lambda match: match.date, reverse=True)
+                    #         )
+                    #         matches.append(
+                    #             Match(
+                    #                 **{
+                    #                     "id": uuid.uuid4(),
+                    #                     "date": match.date,
+                    #                     "map": match.map,
+                    #                     "type": match.type,
+                    #                     "decision": match.decision,
+                    #                     "speed": match.speed,
+                    #                     "duration": current_epoch_time() - match.date,
+                    #                     "profile_id": profile.id,
+                    #                 }
+                    #             )
+                    #         )
 
         return (matches, character_mmrs)
 
@@ -178,7 +178,8 @@ def process_profile_ladder():
             distinct={LadderMember.ladder_id},
         )
 
-        for result, ladder_member in get_task_manager().yield_futures(get_profile_ladder_wrapper, ladder_members):
+        task_manager = TaskManager()
+        for result, ladder_member in task_manager.yield_futures(get_profile_ladder_wrapper, ladder_members):
             if processed != 0 and processed % LADDER_BATCH_SIZE == 0:
                 logger.info(
                     f"Processed {processed} ladders. " f"Last batch took {round(time.time() - batch_start)} seconds."
@@ -197,7 +198,8 @@ def get_ladder_results():
 
     matches = []
     character_mmrs = []
-    for res, _ in get_task_manager().yield_futures(process_profile_ladder_response, process_profile_ladder()):
+    task_manager = TaskManager()
+    for res, _ in task_manager.yield_futures(process_profile_ladder_response, process_profile_ladder()):
         ladders_processed += 1
         ladder_matches, ladder_character_mmrs = res
         matches = matches + ladder_matches

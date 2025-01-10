@@ -22,8 +22,8 @@ from backend.static import (
     LADDER_BATCH_SIZE,
     LADDER_MEMBER_UNIQUE_CONSTRAINT,
 )
-from backend.utils.concurrency_utils import get_task_manager
-from backend.utils.logging_utils import get_logger
+from backend.utils.concurrency import TaskManager
+from backend.utils.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -41,7 +41,8 @@ def process_ladder():
 
     with session_scope() as session:
         ladders = query(session, params={Ladder})
-        for result, ladder in get_task_manager().yield_futures(get_legacy_ladder_wrapper, ladders):
+        task_manager = TaskManager()
+        for result, ladder in task_manager.yield_futures(get_legacy_ladder_wrapper, ladders):
             if processed != 0 and processed % LADDER_BATCH_SIZE == 0:
                 logger.info(
                     f"Processed {processed} ladders. " f"Last batch took {round(time.time() - batch_start)} seconds."

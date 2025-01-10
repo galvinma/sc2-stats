@@ -6,7 +6,6 @@ https://develop.battle.net/documentation/starcraft-2/community-apis
 import time
 from datetime import datetime, timedelta
 from functools import wraps
-from threading import Lock
 
 import requests
 from tenacity import RetryError, retry, stop_after_attempt, wait_fixed
@@ -17,17 +16,11 @@ from backend.static import (
     BLIZZARD_CLIENT_ID,
     BLIZZARD_CLIENT_SECRET,
     BLIZZARD_OATH_BASE,
-    REQUEST_MAX_PER_DAY,
-    REQUEST_MAX_PER_SECOND,
 )
-from backend.utils.logging_utils import get_logger
+from backend.utils.log import get_logger
+from backend.utils.state import AppState
 
 logger = get_logger(__name__)
-
-
-second_request_count = 0
-day_request_count = 0
-lock = Lock()
 
 
 class BlizzardApi:
@@ -155,54 +148,9 @@ class BlizzardApi:
         )
 
 
-def get_second_request_count():
-    global second_request_count
-    with lock:
-        return second_request_count
-
-
-def reset_second_request_count():
-    global second_request_count
-    with lock:
-        second_request_count = 0
-
-
-def increment_second_request_count():
-    global second_request_count
-    with lock:
-        second_request_count += 1
-
-
-def get_day_request_count():
-    global day_request_count
-    with lock:
-        return day_request_count
-
-
-def reset_day_request_count():
-    global day_request_count
-    with lock:
-        day_request_count = 0
-
-
-def increment_day_request_count():
-    global day_request_count
-    with lock:
-        day_request_count += 1
-
-
-def exceeded_max_requests():
-    second_request_count = get_second_request_count()
-    day_request_count = get_day_request_count()
-    exceeded = second_request_count >= REQUEST_MAX_PER_SECOND or day_request_count >= REQUEST_MAX_PER_DAY
-    if exceeded:
-        logger.info(f"Exceeded max API requests. {second_request_count=}, {day_request_count=}")
-    return exceeded
-
-
 def block_request(interval=1):
-    while exceeded_max_requests():
+    while AppState.exceeded_max_requests():
         time.sleep(interval)
 
-    increment_second_request_count()
-    increment_day_request_count()
+    AppState.increment_second_request_count()
+    AppState.increment_day_request_count()
