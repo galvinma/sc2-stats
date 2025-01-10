@@ -8,8 +8,8 @@ from datetime import datetime, timedelta
 from backend.db.db import get_or_create, query, session_scope
 from backend.db.model import Game, Match
 from backend.static import MATCH_LOOKBACK_MAX, MATCH_LOOKBACK_MIN, MATCH_LOOKUP_KEY
-from backend.utils.datetime_utils import datetime_to_epoch
-from backend.utils.logging_utils import get_logger
+from backend.utils.datetime import datetime_to_epoch
+from backend.utils.log import get_logger
 
 # TODO refactor pairing logic to support game modes other than 1V1
 

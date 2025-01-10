@@ -19,8 +19,8 @@ from backend.db.db import (
 from backend.db.model import Ladder, League
 from backend.enums import LeagueId, QueueId, RegionId, TeamType
 from backend.static import LADDER_UNIQUE_CONSTRAINT
-from backend.utils.concurrency_utils import get_task_manager
-from backend.utils.logging_utils import get_logger
+from backend.utils.concurrency import TaskManager
+from backend.utils.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -65,7 +65,8 @@ def process_leagues():
                         )
                     )
 
-    for result, league in get_task_manager().yield_futures(get_league_wrapper, leagues):
+    task_manager = TaskManager()
+    for result, league in task_manager.yield_futures(get_league_wrapper, leagues):
         result.region_id = league.region_id
         yield result
 

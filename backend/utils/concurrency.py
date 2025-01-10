@@ -2,17 +2,9 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Semaphore, Thread
 
-from backend.utils.logging_utils import get_logger
+from backend.utils.log import get_logger
 
 logger = get_logger(__name__)
-
-TASK_MANAGER = None
-
-
-def thread_pool_max_workers():
-    max_threads = max(32, os.cpu_count() * 5)
-    logger.info(f"Will submit tasks with {max_threads=}")
-    return max_threads
 
 
 def run_threaded(job_func):
@@ -21,8 +13,17 @@ def run_threaded(job_func):
     return job_thread
 
 
+def thread_pool_max_workers():
+    return min(32, os.cpu_count() * 5)
+
+
 class TaskManager:
-    def __init__(self, workers=thread_pool_max_workers()):
+    def __init__(self, workers=None):
+        if workers is None:
+            workers = thread_pool_max_workers()
+
+        logger.info(f"Initializing TaskManager with {workers} workers...")
+        self.workers = workers
         self.pool = ThreadPoolExecutor(max_workers=workers)
         self.semaphore = Semaphore(workers)
 
@@ -40,6 +41,4 @@ class TaskManager:
         for future in as_completed(futures):
             yield future.result(), futures[future]
 
-
-def get_task_manager():
-    return TASK_MANAGER if TASK_MANAGER is not None else TaskManager()
+        self.pool.shutdown()
