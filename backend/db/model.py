@@ -11,7 +11,6 @@ from backend.static import (
     LADDER_MEMBER_UNIQUE_CONSTRAINT,
     LADDER_UNIQUE_CONSTRAINT,
     LEAGUE_UNIQUE_CONSTRAINT,
-    MATCH_UNIQUE_CONSTRAINT,
     PROFILE_UNIQUE_CONSTRAINT,
 )
 
@@ -191,7 +190,8 @@ class Game(Base):
     __tablename__ = "game"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
 
-    duration: Mapped[int] = mapped_column()
+    start_timestamp: Mapped[int] = mapped_column()
+    end_timestamp: Mapped[int] = mapped_column()
 
     matches: Mapped[List["Match"]] = relationship(back_populates="game")
 
@@ -200,12 +200,12 @@ class Match(Base):
     __tablename__ = "match"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
 
-    map: Mapped[str] = mapped_column()
-    type: Mapped[str] = mapped_column()
-    date: Mapped[int] = mapped_column()
-    decision: Mapped[str] = mapped_column()
-    speed: Mapped[str] = mapped_column()
-    duration: Mapped[int] = mapped_column()
+    map: Mapped[Optional[str]] = mapped_column()
+    type: Mapped[Optional[str]] = mapped_column()
+    start_timestamp: Mapped[Optional[int]] = mapped_column()
+    end_timestamp: Mapped[Optional[int]] = mapped_column()
+    decision: Mapped[Optional[str]] = mapped_column()
+    speed: Mapped[Optional[str]] = mapped_column()
 
     profile_id = mapped_column(ForeignKey("profile.id"))
     profile: Mapped[Profile] = relationship(back_populates="matches")
@@ -213,17 +213,23 @@ class Match(Base):
     game_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("game.id"))
     game: Mapped[Game] = relationship(back_populates="matches")
 
-    UniqueConstraint(profile_id, date, name=MATCH_UNIQUE_CONSTRAINT)
-
     def __repr__(self) -> str:
         return (
             f"Match(id={self.id!r}, "
             + f"map={self.map!r}, "
             + f"type={self.type!r}, "
-            + f"date={self.date!r}, "
+            + f"start_timestamp={self.start_timestamp!r}, "
+            + f"end_timestamp={self.end_timestamp!r}, "
             + f"decision={self.decision!r}, "
             + f"speed={self.speed!r}, "
-            + f"duration={self.duration!r}, "
             + f"profile_id={self.profile_id!r}"
             + ")"
         )
+
+
+class Request(Base):
+    __tablename__ = "request"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+
+    url: Mapped[str] = mapped_column()
+    timestamp: Mapped[int] = mapped_column()

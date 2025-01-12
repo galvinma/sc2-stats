@@ -2,11 +2,12 @@
 Pydantic schema for legacy APIs
 """
 
+import uuid
 from typing import List, Optional
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
-from backend.db.model import Ladder, Profile
+from backend.db.model import Profile
 from backend.enums import Race
 
 
@@ -43,7 +44,7 @@ class LadderMember(BaseModel):
 class LegacyLadderResponse(BaseModel):
     model_config = ConfigDict(strict=True, arbitrary_types_allowed=True)
 
-    ladder: Optional[Ladder] = None
+    ladder_id: Optional[uuid.UUID] = None
     ladder_members: Optional[List[LadderMember]] = Field(default=[], validation_alias=AliasChoices("ladderMembers"))
 
 
@@ -54,7 +55,7 @@ class Match(BaseModel):
     type: str
     decision: str
     speed: str
-    date: int
+    start_timestamp: int = Field(validation_alias=AliasChoices("date"))
 
 
 class LegacyMatchHistoryResponse(BaseModel):

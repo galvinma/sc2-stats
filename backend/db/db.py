@@ -21,9 +21,14 @@ def get_engine():
     )
 
 
+ENGINE = get_engine()
+
+
 @contextmanager
-def session_scope():
-    engine = get_engine()
+def session_scope(engine=None):
+    if not engine:
+        engine = ENGINE
+
     session = Session(bind=engine)
     try:
         yield session
@@ -35,7 +40,18 @@ def session_scope():
         session.close()
 
 
-def query(session, params, joins=None, filters=None, distinct=None, order_by=None):
+def query(
+    session,
+    params,
+    joins=None,
+    filters=None,
+    distinct=None,
+    options=None,
+    group_by=None,
+    order_by=None,
+    limit=None,
+    count=None,
+):
     stmt = session.query(*params)
 
     if joins:
@@ -49,8 +65,20 @@ def query(session, params, joins=None, filters=None, distinct=None, order_by=Non
     if distinct:
         stmt = stmt.distinct(*distinct)
 
+    if options:
+        stmt.options(options)
+
+    if group_by:
+        stmt.group_by(*group_by)
+
     if order_by is not None:
         stmt = stmt.order_by(order_by)
+
+    if limit is not None:
+        stmt = stmt.limit(limit)
+
+    if count is not None:
+        return stmt.count()
 
     return stmt.all()
 
@@ -81,15 +109,19 @@ def bulk_upsert(session, stmt, constraint, set_):
     )
 
 
+def create(session, instance):
+    session.add(instance)
+    session.commit()
+    return instance
+
+
 def get_or_create(session, model, filter, values):
     instance = session.query(model).filter_by(**filter).first()
     if instance:
         return instance
 
     instance = model(**values)
-    session.add(instance)
-    session.commit()
-    return instance
+    return create(session, instance)
 
 
 def orm_classes_as_dict(iterable):

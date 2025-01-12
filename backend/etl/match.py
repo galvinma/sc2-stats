@@ -5,6 +5,8 @@ ETL processes associated with SC2 ladder games
 from collections import defaultdict
 from datetime import datetime, timedelta
 
+from backend.api.blizzard import BlizzardApi
+from backend.api.models.legacy import LegacyMatchHistoryResponse
 from backend.db.db import get_or_create, query, session_scope
 from backend.db.model import Game, Match
 from backend.static import MATCH_LOOKBACK_MAX, MATCH_LOOKBACK_MIN, MATCH_LOOKUP_KEY
@@ -15,6 +17,17 @@ from backend.utils.log import get_logger
 
 
 logger = get_logger(__name__)
+
+
+def get_match_history_wrapper(profile):
+    api = BlizzardApi()
+    return LegacyMatchHistoryResponse.model_validate(
+        api.get_legacy_match_history(
+            region_id=profile.region_id,
+            realm_id=profile.realm_id,
+            profile_id=profile.profile_id,
+        )
+    )
 
 
 def query_unpaired_matches(session):

@@ -4,8 +4,8 @@ from enum import Enum
 # TODO Enable support for CN region. Think this would require hitting a separate API.
 # TODO Enable support for US/EU. Getting 503 for most requests
 class RegionId(Enum):
-    # US = 1
-    # EU = 2
+    US = 1
+    EU = 2
     KR = 3
     # CN = 5
 
