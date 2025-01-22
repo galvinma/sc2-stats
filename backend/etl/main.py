@@ -9,9 +9,9 @@ from backend.etl.ladder import get_ladders
 from backend.etl.ladder_member import get_ladder_members
 from backend.etl.ladder_result import get_ladder_results
 from backend.etl.match import create_games
+from backend.etl.state import log_app_state
 from backend.utils.concurrency import run_threaded
 from backend.utils.log import get_logger
-from backend.utils.state import log_app_state
 
 load_dotenv()
 
@@ -36,7 +36,7 @@ def handle_schedule():
             job_func=run_threaded, kwargs={"target": get_ladder_results, "region_id": region.value}
         ).tag(f"get_ladder_results_region_id_{region.value}")
 
-    schedule.every(1).hours.do(job_func=run_threaded, kwargs={"target": create_games}).tag("create_games")
+    # schedule.every(1).hours.do(job_func=run_threaded, kwargs={"target": create_games}).tag("create_games")
 
     while True:
         schedule.run_pending()
@@ -57,6 +57,8 @@ def handle_process(process):
             threads.append(run_threaded(kwargs={"target": get_ladder_results, "region_id": region.value}))
     elif process == "games":
         threads.append(run_threaded(kwargs={"target": create_games}))
+    elif process == "app_state":
+        threads.append(run_threaded(kwargs={"target": log_app_state}))
     else:
         logger.error(f"Unable to execute {process=}")
 

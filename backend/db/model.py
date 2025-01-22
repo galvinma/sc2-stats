@@ -8,6 +8,7 @@ from backend.static import (
     BLIZZARD_REQUEST_UNIQUE_CONSTRAINT,
     CHARACTER_MMR_UNIQUE_CONSTRAINT,
     CHARACTER_UNIQUE_CONSTRAINT,
+    ETL_EXECUTION_UNIQUE_CONSTRAINT,
     GAME_UNIQUE_CONSTRAINT,
     LADDER_MEMBER_UNIQUE_CONSTRAINT,
     LADDER_UNIQUE_CONSTRAINT,
@@ -231,10 +232,42 @@ class BlizzardRequest(Base):
     url: Mapped[str] = mapped_column()
     timestamp: Mapped[int] = mapped_column()
 
+    def __repr__(self) -> str:
+        return (
+            f"BlizzardRequest(id={self.id!r}, "
+            + f"region_id={self.region_id!r}, "
+            + f"url={self.url!r}, "
+            + f"timestamp={self.timestamp!r}"
+            + ")"
+        )
+
+
+class ETLExecution(Base):
+    __tablename__ = "etl_execution"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column()
+    region_id: Mapped[int] = mapped_column()
+    start_timestamp: Mapped[int] = mapped_column()
+    end_timestamp: Mapped[Optional[int]] = mapped_column()
+    duration: Mapped[Optional[int]] = mapped_column()
+
+    def __repr__(self) -> str:
+        return (
+            f"ETLExecution(id={self.id!r}, "
+            + f"name={self.name!r}, "
+            + f"region_id={self.region_id!r}, "
+            + f"start_timestamp={self.start_timestamp!r}, "
+            + f"end_timestamp={self.end_timestamp!r}, "
+            + f"duration={self.duration!r}"
+            + ")"
+        )
+
 
 def table_name_to_model(table_name):
     if table_name == "blizzard_request":
         return BlizzardRequest
+    elif table_name == "etl_execution":
+        return ETLExecution
     elif table_name == "league":
         return League
     elif table_name == "ladder":
@@ -258,6 +291,8 @@ def table_name_to_model(table_name):
 def table_name_to_constraint(table_name):
     if table_name == "blizzard_request":
         return BLIZZARD_REQUEST_UNIQUE_CONSTRAINT
+    elif table_name == "etl_execution":
+        return ETL_EXECUTION_UNIQUE_CONSTRAINT
     if table_name == "league":
         return LEAGUE_UNIQUE_CONSTRAINT
     elif table_name == "ladder":

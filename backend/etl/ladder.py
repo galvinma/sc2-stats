@@ -13,7 +13,10 @@ from backend.blizzard.models.game_data import LeagueResponse
 from backend.blizzard.models.ladder import SeasonResponse
 from backend.db.model import League
 from backend.enums import LeagueId, QueueId, TeamType
+from backend.etl.execution import conclude_etl_execution, initiate_etl_execution
+from backend.static import LADDER_JOB_NAME
 from backend.utils.concurrency import yield_futures
+from backend.utils.datetime import datetime_to_epoch
 from backend.utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -73,6 +76,10 @@ def get_ladders(**kwargs):
         logger.warning("Missing required param region_id")
         return
 
+    etl_execution = initiate_etl_execution(
+        name=LADDER_JOB_NAME, region_id=region_id, start_timestamp=datetime_to_epoch(start)
+    )
+
     for league_response in process_leagues(region_id=region_id):
         if league_response and league_response.key:
             values = {
@@ -117,5 +124,6 @@ def get_ladders(**kwargs):
                 )
 
     end = datetime.now()
+    conclude_etl_execution(etl_execution, end_timestamp=datetime_to_epoch(end))
     logger.info(f"Updating leagues and ladders took {round(end.timestamp() - start.timestamp())} seconds.")
     logger.info("Done with fetch of current leagues and ladders.")
