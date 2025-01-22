@@ -12,14 +12,16 @@ from backend.blizzard.api import BlizzardApi
 from backend.blizzard.models.ladder import SeasonResponse
 from backend.blizzard.models.profile import ProfileLadderResponse
 from backend.db.model import Character, Ladder
+from backend.etl.execution import conclude_etl_execution, initiate_etl_execution
 from backend.static import (
     BLIZZARD_503_RETRY_MAX,
     LADDER_CHARACTER_MMR_LOOKUP_KEY,
+    LADDER_RESULTS_JOB_NAME,
     MMR_MAX,
     MMR_MIN,
 )
 from backend.utils.concurrency import yield_futures
-from backend.utils.datetime import current_epoch_time
+from backend.utils.datetime import current_epoch_time, datetime_to_epoch
 from backend.utils.log import get_logger
 
 # TODO refactor this ETL for team types beyond 1v1
@@ -91,7 +93,8 @@ def fetch_profile_ladder(region_id):
 
         # Purge the member that was used in failed fetch
         for members in ladder_members_lookup.values():
-            members.pop(0)
+            if members:
+                members.pop(0)
 
     logger.info(
         f"Could not get results for {len(ladder_members_lookup)}/{len(ladders)} ladders."
@@ -109,6 +112,10 @@ def get_ladder_results(**kwargs):
     if not region_id:
         logger.warning("Missing required param region_id")
         return
+
+    etl_execution = initiate_etl_execution(
+        name=LADDER_RESULTS_JOB_NAME, region_id=region_id, start_timestamp=datetime_to_epoch(start)
+    )
 
     matches = []
     character_mmrs = []
@@ -132,6 +139,7 @@ def get_ladder_results(**kwargs):
         )
 
     end = datetime.now()
+    conclude_etl_execution(etl_execution, end_timestamp=datetime_to_epoch(end))
     logger.info(f"Processed a total of {len(responses)} ladders.")
     logger.info(f"Processing ladder results took {round(end.timestamp() - start.timestamp())} seconds.")
     logger.info("Done with fetch of ladder results.")
@@ -210,7 +218,7 @@ def process_profile_ladder_response(response):
                     logger.warning(f"Too many characters. {lookup_key=}")
                     continue
 
-            logger.info(
+            logger.debug(
                 f"New MMR result for {team_member.profile_id}:{team_member.display_name}:{team_member.race} "
                 + f"{db_mmr} --> {ladder_mmr}"
             )

@@ -1,8 +1,8 @@
 """Init schema
 
-Revision ID: 901c4f9be2e7
+Revision ID: e8a49453ba50
 Revises:
-Create Date: 2025-01-20 22:38:48.934859
+Create Date: 2025-01-22 14:08:26.670741
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "901c4f9be2e7"
+revision: str = "e8a49453ba50"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -26,6 +26,16 @@ def upgrade() -> None:
         sa.Column("region_id", sa.Integer(), nullable=False),
         sa.Column("url", sa.String(), nullable=False),
         sa.Column("timestamp", sa.Integer(), nullable=False),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_table(
+        "etl_execution",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("name", sa.String(), nullable=False),
+        sa.Column("region_id", sa.Integer(), nullable=False),
+        sa.Column("start_timestamp", sa.Integer(), nullable=False),
+        sa.Column("end_timestamp", sa.Integer(), nullable=True),
+        sa.Column("duration", sa.Integer(), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_table(
@@ -159,5 +169,6 @@ def downgrade() -> None:
     op.drop_table("profile")
     op.drop_table("league")
     op.drop_table("game")
+    op.drop_table("etl_execution")
     op.drop_table("blizzard_request")
     # ### end Alembic commands ###

@@ -2,6 +2,7 @@ from backend.db.db import query
 from backend.db.model import (
     Character,
     CharacterMMR,
+    ETLExecution,
     Ladder,
     LadderMember,
     League,
@@ -11,6 +12,22 @@ from backend.static import LADDER_CHARACTER_MMR_LOOKUP_KEY
 from backend.utils.log import get_logger
 
 logger = get_logger(__name__)
+
+
+def query_most_recent_etl_execution(name, region_id):
+    """Return most recent ETL execution for given name and region_id"""
+    return [
+        obj.as_dict()
+        for obj in query(
+            params={ETLExecution},
+            filters=[
+                (ETLExecution.name == name),
+                (ETLExecution.region_id == region_id),
+            ],
+            order_by=[ETLExecution.start_timestamp.desc()],
+            limit=1,
+        )
+    ]
 
 
 def query_ladders(season_id, region_id):

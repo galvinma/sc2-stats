@@ -8,6 +8,7 @@ from backend.db.query import (
     query_ladder_character_mmrs,
     query_ladder_members,
     query_ladders,
+    query_most_recent_etl_execution,
 )
 from backend.utils.log import get_logger
 
@@ -74,13 +75,23 @@ def put(table_name):
 @app.route("/request/limit/<region_id>", methods=["GET"])
 def get_request_limit(region_id):
     """Return if application has exceeded request limit for given region"""
-
     try:
         return make_response(json.dumps({"blocked": BlizzardAPIState.exceeded_max_requests(region_id)}), 200)
     except Exception:
         msg = "Exception thrown while determining API request limit."
         logger.exception(msg)
-        return make_response(json.dumps({"message": "Exception thrown while determining API request limit."}), 500)
+        return make_response(json.dumps({"message": msg}), 500)
+
+
+@app.route("/latest_etl_execution/<name>/<region_id>", methods=["GET"])
+def get_most_recent_etl_execution(name, region_id):
+    """Return most recent ETL execution for given name and region_id"""
+    try:
+        return make_response(json.dumps(query_most_recent_etl_execution(name, region_id)), 200)
+    except Exception:
+        msg = "Exception thrown while getting recent ETL execution."
+        logger.exception(msg)
+        return make_response(json.dumps({"message": msg}), 500)
 
 
 @app.route("/ladder/<season_id>/<region_id>", methods=["GET"])

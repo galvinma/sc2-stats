@@ -42,6 +42,14 @@ CHARACTER_UNIQUE_CONSTRAINT = "character_unique_constraint"
 PROFILE_UNIQUE_CONSTRAINT = "profile_unique_constraint"
 GAME_UNIQUE_CONSTRAINT = "game_pkey"
 MATCH_UNIQUE_CONSTRAINT = "match_pkey"
+ETL_EXECUTION_UNIQUE_CONSTRAINT = "etl_execution_pkey"
+
+
+# Jobs
+LADDER_JOB_NAME = "ladder"
+LADDER_MEMBERS_JOB_NAME = "ladder_members"
+LADDER_RESULTS_JOB_NAME = "ladder_results"
+JOB_NAMES = [LADDER_JOB_NAME, LADDER_MEMBERS_JOB_NAME, LADDER_RESULTS_JOB_NAME]
 
 
 # Lookup Keys
