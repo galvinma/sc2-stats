@@ -2,31 +2,22 @@
 ETL processes associated with SC2 ladder results (MMR, Game duration, Etc.)
 """
 
-import time
-import uuid
+from collections import defaultdict
 from datetime import datetime
 
-from more_itertools import only
+from more_itertools import one
 
-from backend.api.blizzard import BlizzardApi
-from backend.api.models.profile import ProfileLadderResponse
-from backend.db.db import (
-    bulk_insert,
-    get_engine,
-    insert_stmt,
-    orm_classes_as_dict,
-    query,
-    session_scope,
+from backend.api.methods import SC2StatsAPI
+from backend.blizzard.api import BlizzardApi
+from backend.blizzard.models.ladder import SeasonResponse
+from backend.blizzard.models.profile import ProfileLadderResponse
+from backend.db.model import Character, Ladder
+from backend.static import (
+    BLIZZARD_503_RETRY_MAX,
+    LADDER_CHARACTER_MMR_LOOKUP_KEY,
+    MMR_MAX,
+    MMR_MIN,
 )
-from backend.db.model import (
-    Character,
-    CharacterMMR,
-    Ladder,
-    LadderMember,
-    Match,
-    Profile,
-)
-from backend.static import CHARACTER_MMR_UNIQUE_CONSTRAINT, LADDER_BATCH_SIZE
 from backend.utils.concurrency import yield_futures
 from backend.utils.datetime import current_epoch_time
 from backend.utils.log import get_logger
@@ -36,180 +27,204 @@ from backend.utils.log import get_logger
 logger = get_logger(__name__)
 
 
+class MissingCharacter(Exception):
+    pass
+
+
+class TooManyCharacters(Exception):
+    pass
+
+
 def get_profile_ladder_wrapper(ladder_member):
     api = BlizzardApi()
     return ProfileLadderResponse.model_validate(
         api.get_profile_ladder(
-            region_id=ladder_member.region_id,
-            realm_id=ladder_member.realm_id,
-            profile_id=ladder_member.profile_id,
-            ladder_id=ladder_member.ladder_id,
+            region_id=ladder_member.get("region_id"),
+            realm_id=ladder_member.get("realm_id"),
+            profile_id=ladder_member.get("profile_id"),
+            ladder_id=ladder_member.get("ladder_id"),
         )
     )
 
 
-def process_profile_ladder(engine, region_id):
-    processed = 0
-    batch_start = time.time()
-    with session_scope(engine=engine) as session:
-        ladder_members = query(
-            session,
-            params={
-                LadderMember.id,
-                Ladder.ladder_id,
-                Profile.id,
-                Profile.region_id,
-                Profile.realm_id,
-                Profile.profile_id,
-            },
-            joins=[(Profile, Profile.id == LadderMember.profile_id), (Ladder, Ladder.id == LadderMember.ladder_id)],
-            filters=[(Ladder.region_id == region_id)],
-            distinct={LadderMember.ladder_id},
-        )
+def fetch_profile_ladder(region_id):
+    # Query for all ladders in given region for current season
+    blizzard_api = BlizzardApi()
+    season = SeasonResponse.model_validate(blizzard_api.get_ladder_season(region_id=region_id))
+    ladders = [
+        Ladder(**ladder)
+        for ladder in SC2StatsAPI.get(
+            endpoint=f"/ladder/{season.season_id}/{region_id}",
+        ).get("results")
+    ]
 
-    for profile_ladder_response, ladder_member in yield_futures(get_profile_ladder_wrapper, ladder_members):
-        if processed != 0 and processed % LADDER_BATCH_SIZE == 0:
-            logger.info(
-                f"Have fetched {processed} ladders. " f"Last batch took {round(time.time() - batch_start)} seconds."
-            )
-            batch_start = time.time()
+    # Create a map of ladders --> ladder_members (join on ladder_member / profile)
+    ladder_members_lookup = defaultdict(list)
+    for ladder in ladders:
+        ladder_members_lookup[ladder.id] = SC2StatsAPI.get(
+            endpoint=f"/ladder_member/{ladder.id}",
+        ).get(
+            "results"
+        )[0:BLIZZARD_503_RETRY_MAX]
 
-        profile_ladder_response.ladder_member = ladder_member
-        yield profile_ladder_response
-        processed += 1
+    # Fetch ladder results.
+    # For each ladder we use a ladder_member to hit /sc2/profile/:regionId/:realmId/:profileId/ladder/:ladderId
+    # At time of writing this endpoint is wildly sporadic. On failure it returns 503, sometimes 500.
+    # To mitigate this we attempt to get ladder results by using multiple ladder members.
+    # There is a decreased request timeout for these GET requests. 503 would just hang before returning (5+ sec).
+    iteration = 0
+    responses = []
+    logger.info(f"Starting fetch of ladder results. {region_id=}")
+    while ladder_members_lookup and iteration < BLIZZARD_503_RETRY_MAX:
+        logger.info(f"Will attempt fetch for {len(ladder_members_lookup)} ladders. {iteration=}, {region_id=}")
+        ladder_members = [members[0] for members in ladder_members_lookup.values() if len(members) > 0]
+        future_results = list(yield_futures(get_profile_ladder_wrapper, ladder_members))
+        for response, ladder_member in future_results:
+            if response.ladder_teams and len(response.ladder_teams) > 0:
+                # If we got a response with ladder_teams, remove from dict to prevent processing in future iterations.
+                del ladder_members_lookup[ladder_member["pkey_ladder_id"]]
+                response.ladder_member = ladder_member
+                responses.append(response)
 
-    logger.info(f"Done with fetch of ladders. Fetched {processed} total ladders.")
+        logger.info(f"Done with ladder results iteration. {iteration=}, {region_id=}")
+        iteration += 1
+
+        # Purge the member that was used in failed fetch
+        for members in ladder_members_lookup.values():
+            members.pop(0)
+
+    logger.info(
+        f"Could not get results for {len(ladder_members_lookup)}/{len(ladders)} ladders."
+        f"ladder_ids={ladder_members_lookup.keys()}"
+    )
+    logger.info(f"Done fetch of ladder results. Returning {len(responses)} valid responses.")
+    return responses
 
 
 def get_ladder_results(**kwargs):
     logger.info("Starting fetch of ladder results...")
-    ladders_processed = 0
     start = datetime.now()
-    engine = get_engine()
 
     region_id = kwargs.get("region_id")
     if not region_id:
         logger.warning("Missing required param region_id")
         return
 
-    responses = []
-    for profile_ladder_response in process_profile_ladder(engine=engine, region_id=region_id):
-        ladders_processed += 1
-        responses.append(profile_ladder_response)
+    matches = []
+    character_mmrs = []
+    responses = fetch_profile_ladder(region_id=region_id)
+    for result, _ in yield_futures(process_profile_ladder_response, responses):
+        matches = matches + result[0]
+        character_mmrs = character_mmrs + result[1]
 
-    process_profile_ladder_responses(engine, responses)
+    if matches:
+        logger.info(f"Inserting matches. {region_id=}")
+        SC2StatsAPI.post(
+            endpoint="/post/match",
+            data={"rows": matches},
+        )
+
+    if character_mmrs:
+        logger.info(f"Inserting characterMMRs. {region_id=}")
+        SC2StatsAPI.post(
+            endpoint="/post/character_mmr",
+            data={"rows": character_mmrs},
+        )
 
     end = datetime.now()
-    logger.info(f"Processed a total of {ladders_processed} ladders.")
+    logger.info(f"Processed a total of {len(responses)} ladders.")
     logger.info(f"Processing ladder results took {round(end.timestamp() - start.timestamp())} seconds.")
     logger.info("Done with fetch of ladder results.")
 
 
 def process_profile_ladder_response(response):
-    engine = get_engine()
-    mmrs = []
     matches = []
+    character_mmrs = []
+
+    # Fetch latest MMRs in PG for given ladder
+    ladder_character_mmrs = SC2StatsAPI.get(
+        endpoint=f"/ladder/character_mmr/{response.ladder_member["pkey_ladder_id"]}",
+    ).get("results")
+
     for ladder_team in response.ladder_teams:
         if not ladder_team.mmr:
             continue
 
+        if ladder_team.mmr < MMR_MIN or ladder_team.mmr > MMR_MAX:
+            logger.warning(f"The following LadderTeam has an invalid MMR and will not be processed: {ladder_team}")
+            continue
+
         for team_member in ladder_team.team_members:
-            if not team_member.race:
+            if (
+                not team_member.profile_id
+                or not team_member.realm_id
+                or not team_member.region_id
+                or not team_member.display_name
+                or not team_member.race
+            ):
+                logger.warning(
+                    f"The following TeamMember is missing required attrs and will not be processed: {team_member}"
+                )
                 continue
 
-        with session_scope(engine=engine) as session:
-            db_character_mmr = only(
-                query(
-                    session,
-                    params={CharacterMMR},
-                    joins=[
-                        (Character, Character.id == CharacterMMR.character_id),
-                        (Profile, Profile.id == Character.profile_id),
-                    ],
-                    filters=[
-                        (Profile.profile_id == team_member.profile_id),
-                        (Profile.realm_id == team_member.realm_id),
-                        (Profile.region_id == team_member.region_id),
-                        (Character.display_name == team_member.display_name),
-                        (CharacterMMR.race == team_member.race),
-                    ],
-                    order_by=CharacterMMR.date.desc(),
-                    limit=1,
-                )
+            lookup_key = LADDER_CHARACTER_MMR_LOOKUP_KEY.format(
+                profile_id=team_member.profile_id,
+                realm_id=team_member.realm_id,
+                region_id=team_member.region_id,
+                display_name=team_member.display_name,
+                race=team_member.race.value,
             )
-            db_mmr = db_character_mmr.mmr if db_character_mmr else None
-            if db_mmr != ladder_team.mmr:
-                if not db_character_mmr:
-                    character = only(
-                        query(
-                            session,
-                            params={Character},
-                            joins=[(Profile, Profile.id == Character.profile_id)],
-                            filters=[
-                                (Profile.profile_id == team_member.profile_id),
-                                (Profile.realm_id == team_member.realm_id),
-                                (Profile.region_id == team_member.region_id),
-                                (Character.display_name == team_member.display_name),
-                            ],
-                        )
-                    )
-                else:
-                    character = db_character_mmr.character
 
-                if not character:
+            ladder_mmr = ladder_team.mmr
+            db_mmr = None
+            if lookup_key in ladder_character_mmrs:
+                # We have a prior mmr entry for ladder_member
+                lader_character_mmr = ladder_character_mmrs[lookup_key]
+                db_mmr = lader_character_mmr.get("mmr")
+                if db_mmr == ladder_mmr:
                     continue
 
-                logger.info(
-                    f"New MMR result for {character.id}:{team_member.display_name}:{team_member.race.value} "
-                    + f"{db_mmr} --> {ladder_team.mmr}"
-                )
-                mmrs.append(
-                    CharacterMMR(
-                        **{
-                            "id": uuid.uuid4(),
-                            "race": team_member.race,
-                            "mmr": ladder_team.mmr,
-                            "date": current_epoch_time(),
-                            "character_id": character.id,
-                        }
-                    )
+                matches.append(
+                    {
+                        "end_timestamp": current_epoch_time(),
+                        "profile_id": lader_character_mmr.get("pkey_profile_id"),
+                    }
                 )
 
-                if db_mmr is not None:
-                    # TODO determine decision options here
-                    # decision = "Loss" if db_mmr > ladder_team.mmr else "Win"
-                    matches.append(
-                        Match(
-                            **{
-                                "id": uuid.uuid4(),
-                                "end_date": current_epoch_time(),
-                                # "decision": decision,
-                                "profile_id": character.profile_id,
-                            }
+            else:
+                try:
+                    character = Character(
+                        **one(
+                            SC2StatsAPI.get(
+                                endpoint=f"/character/{team_member.region_id}/{team_member.realm_id}/"
+                                + f"{team_member.profile_id}/{team_member.display_name}",
+                            ).get("results"),
+                            too_short=MissingCharacter,
+                            too_long=TooManyCharacters,
                         )
                     )
+                except MissingCharacter:
+                    logger.warning(f"Missing character. Likely resolved with next fetch of ladders. {lookup_key=}")
+                    continue
+                except TooManyCharacters:
+                    logger.warning(f"Too many characters. {lookup_key=}")
+                    continue
 
-    return (mmrs, matches)
-
-
-def process_profile_ladder_responses(engine, responses):
-    character_mmrs = []
-    matches = []
-
-    for res, _ in yield_futures(process_profile_ladder_response, responses):
-        ladder_mmrs, ladder_matches = res
-        character_mmrs = character_mmrs + ladder_mmrs
-        matches = matches + ladder_matches
-
-    with session_scope(engine=engine) as session:
-        if character_mmrs:
-            stmt = insert_stmt(model=CharacterMMR, values=orm_classes_as_dict(character_mmrs))
-            bulk_insert(
-                session,
-                stmt=stmt,
-                constraint=CHARACTER_MMR_UNIQUE_CONSTRAINT,
+            logger.info(
+                f"New MMR result for {team_member.profile_id}:{team_member.display_name}:{team_member.race} "
+                + f"{db_mmr} --> {ladder_mmr}"
             )
 
-        if matches:
-            stmt = insert_stmt(model=Match, values=orm_classes_as_dict(matches))
-            bulk_insert(session, stmt=stmt, constraint=None)
+            character_mmrs.append(
+                {
+                    "race": team_member.race.value,
+                    "mmr": ladder_team.mmr,
+                    "date": current_epoch_time(),
+                    "character_id": (
+                        lader_character_mmr.get("pkey_character_id")
+                        if lookup_key in ladder_character_mmrs
+                        else character.id
+                    ),
+                }
+            )
+    return (matches, character_mmrs)

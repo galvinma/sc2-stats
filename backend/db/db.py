@@ -7,8 +7,11 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from backend.utils.concurrency import thread_pool_max_workers
+from backend.utils.log import get_logger
 
 load_dotenv()
+
+logger = get_logger(__name__)
 
 
 def get_engine():
@@ -41,10 +44,10 @@ def session_scope(engine=None):
 
 
 def query(
-    session,
     params,
     joins=None,
     filters=None,
+    filter_by=None,
     distinct=None,
     options=None,
     group_by=None,
@@ -52,67 +55,71 @@ def query(
     limit=None,
     count=None,
 ):
-    stmt = session.query(*params)
+    with session_scope(engine=ENGINE) as session:
+        stmt = session.query(*params)
 
-    if joins:
-        for tbl, condition in joins:
-            stmt = stmt.join(tbl, condition)
+        if joins:
+            for tbl, condition in joins:
+                stmt = stmt.join(tbl, condition)
 
-    if filters:
-        for filter in filters:
-            stmt = stmt.filter(filter)
+        if filters:
+            for filter in filters:
+                stmt = stmt.filter(filter)
 
-    if distinct:
-        stmt = stmt.distinct(*distinct)
+        if filter_by:
+            stmt = stmt.filter_by(**filter_by)
 
-    if options:
-        stmt.options(options)
+        if distinct:
+            stmt = stmt.distinct(*distinct)
 
-    if group_by:
-        stmt.group_by(*group_by)
+        if options:
+            stmt.options(options)
 
-    if order_by is not None:
-        stmt = stmt.order_by(order_by)
+        if group_by is not None:
+            stmt.group_by(*group_by)
 
-    if limit is not None:
-        stmt = stmt.limit(limit)
+        if order_by is not None:
+            stmt = stmt.order_by(*order_by)
 
-    if count is not None:
-        return stmt.count()
+        if limit is not None:
+            stmt = stmt.limit(limit)
 
-    return stmt.all()
+        if count is not None:
+            return stmt.count()
 
-
-def insert_stmt(model, values, returning=None):
-    stmt = insert(model).values(values)
-
-    if returning:
-        stmt = stmt.returning(returning)
-
-    return stmt
+        res = stmt.all()
+        session.expunge_all()
+        return res
 
 
-def bulk_insert(session, stmt, constraint):
-    session.execute(
-        stmt.on_conflict_do_nothing(
-            constraint=constraint,
+def insert_stmt(model, values):
+    return insert(model).values(values)
+
+
+def bulk_insert(stmt, constraint):
+    with session_scope(engine=ENGINE) as session:
+        session.execute(
+            stmt.on_conflict_do_nothing(
+                constraint=constraint,
+            )
         )
-    )
 
 
-def bulk_upsert(session, stmt, constraint, set_):
-    session.execute(
-        stmt.on_conflict_do_update(
-            constraint=constraint,
-            set_=set_,
+def bulk_upsert(stmt, constraint, set_):
+    with session_scope(engine=ENGINE) as session:
+        session.execute(
+            stmt.on_conflict_do_update(
+                constraint=constraint,
+                set_=set_,
+            )
         )
-    )
 
 
-def create(session, instance):
-    session.add(instance)
-    session.commit()
-    return instance
+def create(instance):
+    with session_scope(engine=ENGINE) as session:
+        session.add(instance)
+        session.commit()
+        return instance
 
 
 def get_or_create(session, model, filter, values):
@@ -121,7 +128,8 @@ def get_or_create(session, model, filter, values):
         return instance
 
     instance = model(**values)
-    return create(session, instance)
+    session.add(instance)
+    session.commit()
 
 
 def orm_classes_as_dict(iterable):

@@ -1,0 +1,47 @@
+import requests
+from flask import json
+from tenacity import retry, stop_after_attempt, wait_fixed
+
+from backend.static import SC2_STATS_API_BASE
+from backend.utils.log import get_logger
+
+logger = get_logger(__name__)
+
+# TODO Add auth
+# TODO Add retry logic
+
+
+class SC2StatsAPI:
+
+    @classmethod
+    def headers(cls):
+        return {"Content-Type": "application/json"}
+
+    @classmethod
+    @retry(stop=stop_after_attempt(2), wait=wait_fixed(0.25))
+    def get(cls, endpoint, params=None):
+        logger.debug(f"Sending GET request to {endpoint=}")
+        res = requests.get(SC2_STATS_API_BASE + endpoint, params=params, headers=SC2StatsAPI.headers())
+        return res.json()
+
+    @classmethod
+    @retry(stop=stop_after_attempt(2), wait=wait_fixed(0.25))
+    def post(cls, endpoint, data):
+        logger.debug(f"Sending POST request to {endpoint=}")
+        res = requests.post(
+            url=SC2_STATS_API_BASE + endpoint,
+            headers=SC2StatsAPI.headers(),
+            data=json.dumps(data, default=str),
+        )
+        return res.json()
+
+    @classmethod
+    @retry(stop=stop_after_attempt(2), wait=wait_fixed(0.25))
+    def put(cls, endpoint, data):
+        logger.debug(f"Sending PUT request to {endpoint=}")
+        res = requests.put(
+            url=SC2_STATS_API_BASE + endpoint,
+            headers=SC2StatsAPI.headers(),
+            json=data,
+        )
+        return res.json()
