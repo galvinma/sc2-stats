@@ -5,10 +5,10 @@ import schedule
 from dotenv import load_dotenv
 
 from backend.enums import RegionId
+from backend.etl.game import create_games
 from backend.etl.ladder import get_ladders
 from backend.etl.ladder_member import get_ladder_members
 from backend.etl.ladder_result import get_ladder_results
-from backend.etl.match import create_games
 from backend.utils.concurrency import run_threaded
 from backend.utils.log import get_logger
 from backend.utils.state import log_app_state

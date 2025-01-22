@@ -88,10 +88,10 @@ def pair_matches():
     logger.info(f"{conflict} matches have a pairing conflict.")
 
 
-def create_games():
-    logger.info("Starting analysis of recent matches. Will attempt to merge matches into games...")
+def get_matches():
+    logger.info("Starting fetch of recent matches...")
     start = datetime.now()
     pair_matches()
     end = datetime.now()
     logger.info(f"Processing recent matches took {round(end.timestamp() - start.timestamp())} seconds.")
-    logger.info("Done with analysis of recent matches.")
+    logger.info("Done with processing of recent matches.")
