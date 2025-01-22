@@ -2,7 +2,6 @@
 Pydantic schema for legacy APIs
 """
 
-import uuid
 from typing import List, Optional
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
@@ -44,7 +43,7 @@ class LadderMember(BaseModel):
 class LegacyLadderResponse(BaseModel):
     model_config = ConfigDict(strict=True, arbitrary_types_allowed=True)
 
-    ladder_id: Optional[uuid.UUID] = None
+    ladder_id: Optional[int] = None
     ladder_members: Optional[List[LadderMember]] = Field(default=[], validation_alias=AliasChoices("ladderMembers"))
 
 

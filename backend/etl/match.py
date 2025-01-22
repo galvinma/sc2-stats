@@ -5,8 +5,8 @@ ETL processes associated with SC2 ladder games
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-from backend.api.blizzard import BlizzardApi
-from backend.api.models.legacy import LegacyMatchHistoryResponse
+from backend.blizzard.api import BlizzardApi
+from backend.blizzard.models.legacy import LegacyMatchHistoryResponse
 from backend.db.db import get_or_create, query, session_scope
 from backend.db.model import Game, Match
 from backend.static import MATCH_LOOKBACK_MAX, MATCH_LOOKBACK_MIN, MATCH_LOOKUP_KEY

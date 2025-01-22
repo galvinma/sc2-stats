@@ -1,3 +1,3 @@
 FROM postgres:16.6-bookworm
 
-EXPOSE 5482
+EXPOSE 6213

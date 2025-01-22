@@ -14,7 +14,7 @@ def run_threaded(kwargs):
 
 
 def thread_pool_max_workers():
-    return min(32, os.cpu_count() * 5)
+    return os.cpu_count() * 5 if os.cpu_count() < 4 else 100
 
 
 def yield_futures(func, iterable, workers=None):

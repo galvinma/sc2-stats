@@ -6,13 +6,13 @@ https://develop.battle.net/documentation/starcraft-2/community-apis
 import time
 from datetime import datetime, timedelta
 from functools import wraps
-from threading import Lock
 
 import requests
 from tenacity import RetryError, retry, stop_after_attempt, wait_fixed
 
-from backend.db.db import ENGINE, create, query, session_scope
-from backend.db.model import Request
+from backend.api.methods import SC2StatsAPI
+from backend.db.db import query
+from backend.db.model import BlizzardRequest
 from backend.enums import RegionId
 from backend.static import (
     BLIZZARD_API_BASE,
@@ -28,33 +28,32 @@ from backend.utils.log import get_logger
 logger = get_logger(__name__)
 
 
-class APIState:
-
-    lock = Lock()
+class BlizzardAPIState:
+    @classmethod
+    def get_request_count(cls, region_id, timestamp):
+        return query(
+            params={BlizzardRequest},
+            filters=[(BlizzardRequest.timestamp >= timestamp), (BlizzardRequest.region_id == region_id)],
+            count=True,
+        )
 
     @classmethod
-    def get_request_count(cls, timestamp):
-        with session_scope(engine=ENGINE) as session:
-            count = query(session, params={Request}, filters=[(Request.timestamp >= timestamp)], count=True)
-            return count
+    def get_second_request_count(cls, region_id):
+        timestamp = datetime_to_epoch(datetime.now() - timedelta(0, 1))
+        return BlizzardAPIState.get_request_count(region_id, timestamp)
 
     @classmethod
-    def get_second_request_count(cls):
-        lookback = datetime_to_epoch(datetime.now() - timedelta(0, 1))
-        return APIState.get_request_count(lookback)
+    def get_day_request_count(cls, region_id):
+        timestamp = datetime_to_epoch(datetime.now() - timedelta(0, 86400))
+        return BlizzardAPIState.get_request_count(region_id, timestamp)
 
     @classmethod
-    def get_day_request_count(cls):
-        lookback = datetime_to_epoch(datetime.now() - timedelta(0, 86400))
-        return APIState.get_request_count(lookback)
-
-    @classmethod
-    def exceeded_max_requests(cls):
-        second_request_count = APIState.get_second_request_count()
-        day_request_count = APIState.get_day_request_count()
+    def exceeded_max_requests(cls, region_id):
+        second_request_count = BlizzardAPIState.get_second_request_count(region_id)
+        day_request_count = BlizzardAPIState.get_day_request_count(region_id)
         exceeded = second_request_count >= REQUEST_MAX_PER_SECOND or day_request_count >= REQUEST_MAX_PER_DAY
         if exceeded:
-            logger.info(f"Exceeded max API requests. {second_request_count=}, {day_request_count=}")
+            logger.debug(f"Exceeded max API requests. {region_id=}, {second_request_count=}, {day_request_count=}")
         return exceeded
 
 
@@ -87,38 +86,45 @@ class BlizzardApi:
 
         return datetime.now() > BlizzardApi.oauth_token_expiration
 
-    def headers():
+    def blizzard_headers():
         if not BlizzardApi.oauth_token:
             return {}
 
         return {"Authorization": f"Bearer {BlizzardApi.oauth_token}"}
 
-    def block_request(self, url, interval=0.25):
+    def block_request(self, region_id, url, interval=0.25):
         blocked = True
         while blocked:
-            with APIState.lock:
-                blocked = APIState.exceeded_max_requests()
-
+            res = SC2StatsAPI.get(endpoint=f"/request/limit/{region_id}")
+            blocked = res.get("blocked")
             if blocked:
                 time.sleep(interval)
 
-        with session_scope(engine=ENGINE) as session:
-            create(session=session, instance=Request(url=url, timestamp=current_epoch_time()))
+        SC2StatsAPI.post(
+            endpoint="/post/blizzard_request",
+            data={"url": url, "region_id": region_id, "timestamp": current_epoch_time()},
+        )
 
     @_refesh_battlenet_oauth_token
     @retry(
         stop=stop_after_attempt(2),
-        wait=wait_fixed(0.25),
+        wait=wait_fixed(0.1),
     )
-    def _get(self, url):
+    def _get(self, url, timeout):
         logger.info(f"Sending GET request to {url=}")
-        res = requests.get(url, headers=BlizzardApi.headers())
+
+        try:
+            res = requests.get(url, headers=BlizzardApi.blizzard_headers(), timeout=timeout)
+        except requests.exceptions.Timeout:
+            logger.error(f"Exceeded timeout fetching {url=}")
+            return {}
+
         if res.ok:
             return res.json()
 
         if res.status_code == 503:
-            logger.error(f"Service Unavailable. {res.status_code=}, {url=}. Will retry...")
-            raise Exception
+            logger.error(f"Service Unavailable. {res.status_code=}, {url=}")
+            return {}
 
         if res.status_code == 429:
             logger.warning(f"Too May Requests. {res.status_code=}. Will retry...")
@@ -134,12 +140,15 @@ class BlizzardApi:
 
         return {}
 
-    def get(self, url):
+    def get(self, region_id, url, timeout=10):
         try:
-            self.block_request(url=url)
-            return self._get(url=url)
+            self.block_request(region_id=region_id, url=url)
+            return self._get(url=url, timeout=timeout)
         except RetryError:
             logger.error(f"Exceeded retries fetching {url=}")
+            return {}
+        except Exception:
+            logger.exception("Exception thrown in GET request.")
             return {}
 
     # Game Data API
@@ -149,8 +158,9 @@ class BlizzardApi:
         /data/sc2/league/{seasonId}/{queueId}/{teamType}/{leagueId}
         """
         return self.get(
+            region_id=region_id,
             url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower())
-            + f"/data/sc2/league/{season_id}/{queue_id}/{team_type}/{league_id}"
+            + f"/data/sc2/league/{season_id}/{queue_id}/{team_type}/{league_id}",
         )
 
     # Profile API
@@ -160,8 +170,10 @@ class BlizzardApi:
         /sc2/profile/:regionId/:realmId/:profileId/ladder/:ladderId
         """
         return self.get(
+            region_id=region_id,
             url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower())
-            + f"/sc2/profile/{region_id}/{realm_id}/{profile_id}/ladder/{ladder_id}"
+            + f"/sc2/profile/{region_id}/{realm_id}/{profile_id}/ladder/{ladder_id}",
+            timeout=3,
         )
 
     # Ladder API
@@ -171,7 +183,8 @@ class BlizzardApi:
         /sc2/ladder/season/:regionId
         """
         return self.get(
-            url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower()) + f"/sc2/ladder/season/{region_id}"
+            region_id=region_id,
+            url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower()) + f"/sc2/ladder/season/{region_id}",
         )
 
     # Legacy API
@@ -181,8 +194,9 @@ class BlizzardApi:
         /sc2/legacy/ladder/:regionId/:ladderId
         """
         return self.get(
+            region_id=region_id,
             url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower())
-            + f"/sc2/legacy/ladder/{region_id}/{ladder_id}"
+            + f"/sc2/legacy/ladder/{region_id}/{ladder_id}",
         )
 
     def get_legacy_match_history(self, region_id, realm_id, profile_id):
@@ -190,6 +204,7 @@ class BlizzardApi:
         /sc2/legacy/profile/:regionId/:realmId/:profileId/matches
         """
         return self.get(
+            region_id=region_id,
             url=BLIZZARD_API_BASE.format(region=RegionId(region_id).name.lower())
-            + f"/sc2/legacy/profile/{region_id}/{realm_id}/{profile_id}/matches"
+            + f"/sc2/legacy/profile/{region_id}/{realm_id}/{profile_id}/matches",
         )

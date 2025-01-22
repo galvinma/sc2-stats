@@ -1,4 +1,3 @@
-import uuid
 from typing import List, Optional
 
 from sqlalchemy import ForeignKey, UniqueConstraint
@@ -6,13 +5,19 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from backend.enums import Race
 from backend.static import (
+    BLIZZARD_REQUEST_UNIQUE_CONSTRAINT,
     CHARACTER_MMR_UNIQUE_CONSTRAINT,
     CHARACTER_UNIQUE_CONSTRAINT,
+    GAME_UNIQUE_CONSTRAINT,
     LADDER_MEMBER_UNIQUE_CONSTRAINT,
     LADDER_UNIQUE_CONSTRAINT,
     LEAGUE_UNIQUE_CONSTRAINT,
+    MATCH_UNIQUE_CONSTRAINT,
     PROFILE_UNIQUE_CONSTRAINT,
 )
+from backend.utils.log import get_logger
+
+logger = get_logger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -24,8 +29,7 @@ class Base(DeclarativeBase):
 
 class League(Base):
     __tablename__ = "league"
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     league_id: Mapped[int] = mapped_column()
     region_id: Mapped[int] = mapped_column()
     season_id: Mapped[int] = mapped_column()
@@ -50,8 +54,7 @@ class League(Base):
 
 class Ladder(Base):
     __tablename__ = "ladder"
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     ladder_id: Mapped[int] = mapped_column()
     region_id: Mapped[int] = mapped_column()
     min_rating: Mapped[Optional[int]] = mapped_column()
@@ -78,8 +81,7 @@ class Ladder(Base):
 
 class LadderMember(Base):
     __tablename__ = "ladder_member"
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     join_timestamp: Mapped[int] = mapped_column()
     points: Mapped[Optional[int]] = mapped_column()
     wins: Mapped[Optional[int]] = mapped_column()
@@ -113,8 +115,7 @@ class LadderMember(Base):
 
 class CharacterMMR(Base):
     __tablename__ = "character_mmr"
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     race: Mapped[Race] = mapped_column()
     mmr: Mapped[int] = mapped_column()
     date: Mapped[int] = mapped_column()
@@ -137,8 +138,7 @@ class CharacterMMR(Base):
 
 class Character(Base):
     __tablename__ = "character"
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     display_name: Mapped[str] = mapped_column()
     clan_name: Mapped[Optional[str]] = mapped_column()
     clan_tag: Mapped[Optional[str]] = mapped_column()
@@ -164,9 +164,8 @@ class Character(Base):
 
 class Profile(Base):
     __tablename__ = "profile"
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-
-    profile_id: Mapped[str] = mapped_column()
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    profile_id: Mapped[int] = mapped_column()
     realm_id: Mapped[int] = mapped_column()
     region_id: Mapped[int] = mapped_column()
 
@@ -188,8 +187,7 @@ class Profile(Base):
 
 class Game(Base):
     __tablename__ = "game"
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     start_timestamp: Mapped[int] = mapped_column()
     end_timestamp: Mapped[int] = mapped_column()
 
@@ -198,8 +196,7 @@ class Game(Base):
 
 class Match(Base):
     __tablename__ = "match"
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     map: Mapped[Optional[str]] = mapped_column()
     type: Mapped[Optional[str]] = mapped_column()
     start_timestamp: Mapped[Optional[int]] = mapped_column()
@@ -210,7 +207,7 @@ class Match(Base):
     profile_id = mapped_column(ForeignKey("profile.id"))
     profile: Mapped[Profile] = relationship(back_populates="matches")
 
-    game_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("game.id"))
+    game_id: Mapped[Optional[int]] = mapped_column(ForeignKey("game.id"))
     game: Mapped[Game] = relationship(back_populates="matches")
 
     def __repr__(self) -> str:
@@ -227,9 +224,55 @@ class Match(Base):
         )
 
 
-class Request(Base):
-    __tablename__ = "request"
-    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-
+class BlizzardRequest(Base):
+    __tablename__ = "blizzard_request"
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    region_id: Mapped[int] = mapped_column()
     url: Mapped[str] = mapped_column()
     timestamp: Mapped[int] = mapped_column()
+
+
+def table_name_to_model(table_name):
+    if table_name == "blizzard_request":
+        return BlizzardRequest
+    elif table_name == "league":
+        return League
+    elif table_name == "ladder":
+        return Ladder
+    elif table_name == "ladder_member":
+        return LadderMember
+    elif table_name == "character_mmr":
+        return CharacterMMR
+    elif table_name == "character":
+        return Character
+    elif table_name == "profile":
+        return Profile
+    elif table_name == "game":
+        return Game
+    elif table_name == "match":
+        return Match
+    else:
+        logger.warning(f"Unable to map {table_name} to model.")
+
+
+def table_name_to_constraint(table_name):
+    if table_name == "blizzard_request":
+        return BLIZZARD_REQUEST_UNIQUE_CONSTRAINT
+    if table_name == "league":
+        return LEAGUE_UNIQUE_CONSTRAINT
+    elif table_name == "ladder":
+        return LADDER_UNIQUE_CONSTRAINT
+    elif table_name == "ladder_member":
+        return LADDER_MEMBER_UNIQUE_CONSTRAINT
+    elif table_name == "character_mmr":
+        return CHARACTER_MMR_UNIQUE_CONSTRAINT
+    elif table_name == "character":
+        return CHARACTER_UNIQUE_CONSTRAINT
+    elif table_name == "profile":
+        return PROFILE_UNIQUE_CONSTRAINT
+    elif table_name == "game":
+        return GAME_UNIQUE_CONSTRAINT
+    elif table_name == "match":
+        return MATCH_UNIQUE_CONSTRAINT
+    else:
+        logger.warning(f"Unable to map {table_name} to constraint.")
