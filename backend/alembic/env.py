@@ -1,13 +1,11 @@
 import os
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-
 from alembic import context
-from backend.db.model import Base
 from dotenv import load_dotenv
+from sqlalchemy import engine_from_config, pool
 
+from backend.db.model import Base
 
 load_dotenv()
 
@@ -16,7 +14,7 @@ load_dotenv()
 config = context.config
 
 # Set
-config.set_main_option("sqlalchemy.url", os.environ.get("PG_URI"))
+config.set_main_option("sqlalchemy.url", os.environ.get("SC2_STATS_PG_URI"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from backend.db.db import query
 from backend.db.model import (
     Character,
@@ -6,9 +8,15 @@ from backend.db.model import (
     Ladder,
     LadderMember,
     League,
+    Match,
     Profile,
 )
-from backend.static import LADDER_CHARACTER_MMR_LOOKUP_KEY
+from backend.static import (
+    LADDER_CHARACTER_MMR_LOOKUP_KEY,
+    MATCH_LOOKBACK_MAX,
+    MATCH_LOOKBACK_MIN,
+)
+from backend.utils.datetime import datetime_to_epoch
 from backend.utils.log import get_logger
 
 logger = get_logger(__name__)
@@ -129,3 +137,15 @@ def query_character(region_id, realm_id, profile_id, display_name):
             ],
         )
     ]
+
+
+def query_unpaired_matches(session):
+    """Get all matches in recent history that have not been merged into a game"""
+
+    lookback_max = datetime_to_epoch(datetime.now() - timedelta(0, MATCH_LOOKBACK_MAX))
+    lookback_min = datetime_to_epoch(datetime.now() - timedelta(0, MATCH_LOOKBACK_MIN))
+    return query(
+        session,
+        params={Match},
+        filters=[(Match.game_id == None), (Match.date > lookback_max), (Match.date < lookback_min)],  # noqa E711
+    )

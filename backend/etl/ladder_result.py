@@ -12,6 +12,7 @@ from backend.blizzard.api import BlizzardApi
 from backend.blizzard.models.ladder import SeasonResponse
 from backend.blizzard.models.profile import ProfileLadderResponse
 from backend.db.model import Character, Ladder
+from backend.enums import MatchDecision
 from backend.etl.execution import conclude_etl_execution, initiate_etl_execution
 from backend.static import (
     BLIZZARD_503_RETRY_MAX,
@@ -125,14 +126,14 @@ def get_ladder_results(**kwargs):
         character_mmrs = character_mmrs + result[1]
 
     if matches:
-        logger.info(f"Inserting matches. {region_id=}")
+        logger.info(f"Inserting {len(matches)} matches. {region_id=}")
         SC2StatsAPI.post(
             endpoint="/post/match",
             data={"rows": matches},
         )
 
     if character_mmrs:
-        logger.info(f"Inserting characterMMRs. {region_id=}")
+        logger.info(f"Inserting {len(character_mmrs)} characterMMRs. {region_id=}")
         SC2StatsAPI.post(
             endpoint="/post/character_mmr",
             data={"rows": character_mmrs},
@@ -192,12 +193,22 @@ def process_profile_ladder_response(response):
                 if db_mmr == ladder_mmr:
                     continue
 
-                matches.append(
-                    {
-                        "end_timestamp": current_epoch_time(),
-                        "profile_id": lader_character_mmr.get("pkey_profile_id"),
-                    }
+                # TODO subtract time from last ETL execution ??
+
+                match = {
+                    "end_timestamp": current_epoch_time(),
+                    "profile_id": lader_character_mmr.get("pkey_profile_id"),
+                    "reconciled": False,
+                }
+                decision = (
+                    MatchDecision.WIN.value
+                    if ladder_mmr > db_mmr
+                    else MatchDecision.LOSS.value if ladder_mmr < db_mmr else None
                 )
+                if decision is not None:
+                    match = match | {"decision": decision}
+
+                matches.append(match)
 
             else:
                 try:

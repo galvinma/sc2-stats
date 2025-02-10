@@ -18,6 +18,8 @@ from backend.static import (
 )
 from backend.utils.log import get_logger
 
+# TODO update reprs
+
 logger = get_logger(__name__)
 
 
@@ -200,16 +202,21 @@ class Match(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     map: Mapped[Optional[str]] = mapped_column()
     type: Mapped[Optional[str]] = mapped_column()
-    start_timestamp: Mapped[Optional[int]] = mapped_column()
-    end_timestamp: Mapped[Optional[int]] = mapped_column()
     decision: Mapped[Optional[str]] = mapped_column()
     speed: Mapped[Optional[str]] = mapped_column()
-
+    start_timestamp: Mapped[Optional[int]] = mapped_column()
+    end_timestamp: Mapped[Optional[int]] = mapped_column()
+    duration: Mapped[Optional[int]] = mapped_column()
+    reconciled: Mapped[Optional[bool]] = mapped_column()
     profile_id = mapped_column(ForeignKey("profile.id"))
     profile: Mapped[Profile] = relationship(back_populates="matches")
-
     game_id: Mapped[Optional[int]] = mapped_column(ForeignKey("game.id"))
     game: Mapped[Game] = relationship(back_populates="matches")
+    UniqueConstraint(
+        profile_id,
+        start_timestamp,
+        name=MATCH_UNIQUE_CONSTRAINT,
+    )
 
     def __repr__(self) -> str:
         return (

@@ -2,7 +2,7 @@ import os
 from contextlib import contextmanager
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 def get_engine():
     workers = thread_pool_max_workers()
     return create_engine(
-        os.environ.get("PG_URI"),
+        os.environ.get("SC2_STATS_PG_URI"),
         pool_size=workers,
         max_overflow=int(workers * 0.1),
         pool_timeout=30,
@@ -92,6 +92,13 @@ def query(
         return res
 
 
+def query_in(model, column_name, iterable):
+    with session_scope(engine=ENGINE) as session:
+        res = session.query(model).filter(getattr(model, column_name).in_(iterable)).all()
+        session.expunge_all()
+        return res
+
+
 def insert_stmt(model, values):
     return insert(model).values(values)
 
@@ -115,21 +122,10 @@ def bulk_upsert(stmt, constraint, set_):
         )
 
 
-def create(instance):
+def bulk_delete(model, column_name, iterable):
     with session_scope(engine=ENGINE) as session:
-        session.add(instance)
-        session.commit()
-        return instance
-
-
-def get_or_create(session, model, filter, values):
-    instance = session.query(model).filter_by(**filter).first()
-    if instance:
-        return instance
-
-    instance = model(**values)
-    session.add(instance)
-    session.commit()
+        stmt = delete(model).where(getattr(model, column_name).in_(iterable))
+        session.execute(stmt)
 
 
 def orm_classes_as_dict(iterable):

@@ -145,7 +145,7 @@ class BlizzardApi:
             self.block_request(region_id=region_id, url=url)
             return self._get(url=url, timeout=timeout)
         except RetryError:
-            logger.error(f"Exceeded retries fetching {url=}")
+            logger.exception(f"Exceeded retries fetching {url=}")
             return {}
         except Exception:
             logger.exception("Exception thrown in GET request.")

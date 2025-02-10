@@ -4,9 +4,9 @@ from enum import Enum
 # TODO Enable support for CN region. Think this would require hitting a separate API.
 # TODO Enable support for US/EU. Getting 503 for most requests
 class RegionId(Enum):
-    US = 1
+    # US = 1
     EU = 2
-    KR = 3
+    # KR = 3
     # CN = 5
 
 
@@ -58,3 +58,23 @@ class Race(Enum):
     TERRAN = "TERRAN"
     PROTOSS = "PROTOSS"
     RANDOM = "RANDOM"
+
+
+# TODO Complete the match enums with all possible blizzard values
+
+
+class MatchSpeed(Enum):
+    FASTER = "Faster"
+
+
+class MatchType(Enum):
+    _1V1 = "1v1"
+
+
+class MatchDecision(Enum):
+    WIN = "Win"
+    LOSS = "Loss"
+    TIE = "Tie"
+    LEFT = "Left"
+    OBSERVER = "Observer"
+    UNKNOWN = "Unknown"  # This is not a blizzard response

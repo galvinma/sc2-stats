@@ -1,8 +1,8 @@
 # SC2 Stats
-data
-notes
-log
-.ve
+/data
+/notes
+/test
+/log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -134,7 +134,9 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+.ve
 .env
+.test.env
 .venv
 env/
 venv/

@@ -1,7 +1,15 @@
 from flask import Flask, json, make_response, request
 
+from backend.api.routes.match import get_profile_matches, get_unreconciled_matches
 from backend.blizzard.api import BlizzardAPIState
-from backend.db.db import bulk_insert, bulk_upsert, insert_stmt, query
+from backend.db.db import (
+    bulk_delete,
+    bulk_insert,
+    bulk_upsert,
+    insert_stmt,
+    query,
+    query_in,
+)
 from backend.db.model import table_name_to_constraint, table_name_to_model
 from backend.db.query import (
     query_character,
@@ -16,6 +24,10 @@ app = Flask(__name__)
 
 
 logger = get_logger(__name__)
+
+
+app.add_url_rule("/match/unreconciled/<region_id>/", methods=["GET"], view_func=get_unreconciled_matches)
+app.add_url_rule("/match/profile/<region_id>/<profile_id>", methods=["GET"], view_func=get_profile_matches)
 
 
 @app.route("/get/<table_name>", methods=["GET"])
@@ -72,6 +84,50 @@ def put(table_name):
         return make_response(json.dumps({"message": msg}), 500)
 
 
+@app.route("/in/<table_name>/<column_name>", methods=["POST"])
+def post_in(table_name, column_name):
+    try:
+        return make_response(
+            json.dumps(
+                {
+                    "message": "Success",
+                    "results": [
+                        obj.as_dict()
+                        for obj in query_in(
+                            table_name_to_model(table_name), column_name, request.get_json().get("iterable")
+                        )
+                    ],
+                }
+            ),
+            200,
+        )
+    except Exception:
+        msg = "Exception thrown during POST/IN."
+        logger.exception(msg)
+        return make_response(json.dumps({"message": msg}), 500)
+
+
+@app.route("/in/<table_name>/<column_name>", methods=["DELETE"])
+def delete_in(table_name, column_name):
+    try:
+        bulk_delete(table_name_to_model(table_name), column_name, request.get_json().get("iterable"))
+        return make_response(
+            json.dumps(
+                {
+                    "message": "Success",
+                }
+            ),
+            200,
+        )
+    except Exception:
+        msg = "Exception thrown during DELETE/IN."
+        logger.exception(msg)
+        return make_response(json.dumps({"message": msg}), 500)
+
+
+# Blizzard Request
+
+
 @app.route("/request/limit/<region_id>", methods=["GET"])
 def get_request_limit(region_id):
     """Return if application has exceeded request limit for given region"""
@@ -83,6 +139,9 @@ def get_request_limit(region_id):
         return make_response(json.dumps({"message": msg}), 500)
 
 
+# ETL
+
+
 @app.route("/latest_etl_execution/<name>/<region_id>", methods=["GET"])
 def get_most_recent_etl_execution(name, region_id):
     """Return most recent ETL execution for given name and region_id"""
@@ -92,6 +151,9 @@ def get_most_recent_etl_execution(name, region_id):
         msg = "Exception thrown while getting recent ETL execution."
         logger.exception(msg)
         return make_response(json.dumps({"message": msg}), 500)
+
+
+# Ladder
 
 
 @app.route("/ladder/<season_id>/<region_id>", methods=["GET"])
@@ -149,6 +211,9 @@ def get_ladder_character_mmrs(pkey_ladder_id):
         return make_response(json.dumps({"message": msg}), 500)
 
 
+# Character
+
+
 @app.route("/character/<region_id>/<realm_id>/<profile_id>/<display_name>", methods=["GET"])
 def get_character(region_id, realm_id, profile_id, display_name):
     try:
@@ -165,3 +230,6 @@ def get_character(region_id, realm_id, profile_id, display_name):
         msg = "Exception thrown while fetching character."
         logger.exception(msg)
         return make_response(json.dumps({"message": msg}), 500)
+
+
+# Match

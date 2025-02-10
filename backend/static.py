@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -7,7 +6,7 @@ load_dotenv()
 
 
 # Paths
-APPLICATION_LOG_PATH = Path("/app/log/sc2_stats.log")
+LOG_PATH = "/app/log/backend.log"
 
 # Blizzard API
 BLIZZARD_OATH_BASE = "https://oauth.battle.net"
@@ -21,11 +20,14 @@ BLIZZARD_503_RETRY_MAX = 3
 
 # SC2 STATS API
 SC2_STATS_API_BASE = os.environ.get("SC2_STATS_API_BASE")
+SC2_STATS_API_PORT = os.environ.get("SC2_STATS_API_PORT")
+
 
 # Match
 MATCH_LOOKUP_KEY = "{map}_{type}_{date}_{speed}"
 MATCH_LOOKBACK_MAX = 86400  # Assume games will be reported within 24 hours
 MATCH_LOOKBACK_MIN = 3600 * 7  # Maximum game time 6hours, 30mins, 6seconds. Round to 7hrs for API time buffer
+
 
 # Batch
 LADDER_BATCH_SIZE = 50
@@ -49,11 +51,13 @@ ETL_EXECUTION_UNIQUE_CONSTRAINT = "etl_execution_pkey"
 LADDER_JOB_NAME = "ladder"
 LADDER_MEMBERS_JOB_NAME = "ladder_members"
 LADDER_RESULTS_JOB_NAME = "ladder_results"
-JOB_NAMES = [LADDER_JOB_NAME, LADDER_MEMBERS_JOB_NAME, LADDER_RESULTS_JOB_NAME]
+MATCH_JOB_NAME = "match"
+JOB_NAMES = [LADDER_JOB_NAME, LADDER_MEMBERS_JOB_NAME, LADDER_RESULTS_JOB_NAME, MATCH_JOB_NAME]
 
 
 # Lookup Keys
 LADDER_CHARACTER_MMR_LOOKUP_KEY = "{profile_id}_{realm_id}_{region_id}_{display_name}_{race}"
+MATCH_RECONCILE_LOOKUP_KEY = "{map}_{type}_{decision}_{speed}_{start_timestamp}"
 
 
 # Misc.

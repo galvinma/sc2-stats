@@ -1,8 +1,8 @@
 """Init schema
 
-Revision ID: e8a49453ba50
+Revision ID: ff4dfcc470c8
 Revises:
-Create Date: 2025-01-22 14:08:26.670741
+Create Date: 2025-01-25 00:33:12.732764
 
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = "e8a49453ba50"
+revision: str = "ff4dfcc470c8"
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -103,10 +103,12 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("map", sa.String(), nullable=True),
         sa.Column("type", sa.String(), nullable=True),
-        sa.Column("start_timestamp", sa.Integer(), nullable=True),
-        sa.Column("end_timestamp", sa.Integer(), nullable=True),
         sa.Column("decision", sa.String(), nullable=True),
         sa.Column("speed", sa.String(), nullable=True),
+        sa.Column("start_timestamp", sa.Integer(), nullable=True),
+        sa.Column("end_timestamp", sa.Integer(), nullable=True),
+        sa.Column("duration", sa.Integer(), nullable=True),
+        sa.Column("reconciled", sa.Boolean(), nullable=True),
         sa.Column("profile_id", sa.Integer(), nullable=True),
         sa.Column("game_id", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(
@@ -118,6 +120,7 @@ def upgrade() -> None:
             ["profile.id"],
         ),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("profile_id", "start_timestamp", name="match_unique_constraint"),
     )
     op.create_table(
         "character_mmr",

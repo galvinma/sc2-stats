@@ -8,7 +8,9 @@ from backend.enums import RegionId
 from backend.etl.ladder import get_ladders
 from backend.etl.ladder_member import get_ladder_members
 from backend.etl.ladder_result import get_ladder_results
-from backend.etl.match import create_games
+
+# from backend.etl.match import create_games
+from backend.etl.match import get_matches
 from backend.etl.state import log_app_state
 from backend.utils.concurrency import run_threaded
 from backend.utils.log import get_logger
@@ -55,8 +57,11 @@ def handle_process(process):
     elif process == "ladder_results":
         for region in RegionId:
             threads.append(run_threaded(kwargs={"target": get_ladder_results, "region_id": region.value}))
-    elif process == "games":
-        threads.append(run_threaded(kwargs={"target": create_games}))
+    elif process == "match":
+        for region in RegionId:
+            threads.append(run_threaded(kwargs={"target": get_matches, "region_id": region.value}))
+    # elif process == "games":
+    #     threads.append(run_threaded(kwargs={"target": create_games}))
     elif process == "app_state":
         threads.append(run_threaded(kwargs={"target": log_app_state}))
     else:
